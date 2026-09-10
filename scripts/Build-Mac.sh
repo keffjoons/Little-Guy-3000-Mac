@@ -5,7 +5,7 @@ cd "$ROOT"
 APP="$ROOT/artifacts/Little Guy 3000.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/.local/swift-cache"
 python3 - "$ROOT" "$APP" <<'PY'
-import pathlib, plistlib, re, sys
+import pathlib, plistlib, re, shutil, sys
 root, app = map(pathlib.Path, sys.argv[1:])
 # Reuse the Windows guide's restrictions instead of maintaining a divergent policy.
 source = (root/'src/LittleGuy3000.Codex/CodexClient.cs').read_text()
@@ -13,9 +13,10 @@ match = re.search(r'public const string Text = """\n(.*?)\n\s*""";', source, re.
 if not match: raise SystemExit('Guide configuration not found')
 config = '\n'.join(line.strip() for line in match.group(1).splitlines()) + '\n'
 (app/'Contents/Resources/guide-config.toml').write_text(config)
+shutil.copyfile(root/'src/LittleGuy3000.Desktop/Assets/Square150x150Logo.scale-200.png', app/'Contents/Resources/LittleGuy.png')
 info = dict(CFBundleExecutable='LittleGuy3000', CFBundleIdentifier='com.littleguy3000.mac',
-            CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.1.0', CFBundleVersion='1',
+            CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000', CFBundleIconFile='LittleGuy.png',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.2.0', CFBundleVersion='2',
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSScreenCaptureUsageDescription='Attach only the screen area you select to your question.')
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(info, f)

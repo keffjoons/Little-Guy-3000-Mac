@@ -7,7 +7,16 @@ enum CompanionError: LocalizedError {
 
 // All protocol state belongs to the main actor. Pipe readers only frame bytes.
 @MainActor
-final class CodexConnection {
+protocol CodexTransport: AnyObject {
+    var notification: ((String, [String: Any]) -> Void)? { get set }
+    var disconnected: (() -> Void)? { get set }
+    func start(executable: String, home: URL, configuration: String) async throws
+    func request(_ method: String, _ params: [String: Any]) async throws -> [String: Any]
+    func stop()
+}
+
+@MainActor
+final class CodexConnection: CodexTransport {
     private var process: Process?
     private var input: FileHandle?
     private var nextID = 0
@@ -87,7 +96,7 @@ final class CodexConnection {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.1.0"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.2.0"],
                 "capabilities": ["experimentalApi": true]
             ])
             try write(["method": "initialized"])
@@ -169,6 +178,15 @@ struct AnswerStream {
     mutating func accept(_ method: String, _ body: [String: Any]) -> String? {
         guard body["threadId"] as? String == threadID else { return nil }
         if let incoming = body["turnId"] as? String, let turnID, incoming != turnID { return nil }
+        if method == "turn/started", let turn = body["turn"] as? [String: Any] {
+            turnID = turn["id"] as? String
+        }
+        if method == "item/completed", let item = body["item"] as? [String: Any],
+           item["type"] as? String == "agentMessage", let finalText = item["text"] as? String {
+            guard finalText.utf8.count <= 200_000 else { return "oversized" }
+            text = finalText
+            return "delta"
+        }
         if method == "item/agentMessage/delta", let delta = body["delta"] as? String {
             let incoming = body["itemId"] as? String
             if incoming != itemID { text = ""; itemID = incoming }

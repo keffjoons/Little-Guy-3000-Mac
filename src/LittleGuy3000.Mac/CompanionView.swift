@@ -2,7 +2,14 @@ import AppKit
 
 final class CompanionView: NSView {
     var thinking = false
-    var clicked: (() -> Void)?
+    var reduceMotion = false
+    var clicked: (() -> Void)? {
+        didSet {
+            setAccessibilityElement(clicked != nil)
+            setAccessibilityRole(clicked == nil ? .image : .button)
+            setAccessibilityLabel(clicked == nil ? "Little Guy" : "Little Guy. Open Ask panel.")
+        }
+    }
     private var tick = 0.0
     private var timer: Timer?
 
@@ -12,15 +19,16 @@ final class CompanionView: NSView {
             guard let self else { return }
             self.tick += 0.05; self.needsDisplay = true
         }
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
-        setAccessibilityLabel("Little Guy. Open Ask panel.")
+        setAccessibilityElement(false)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func accessibilityPerformPress() -> Bool { clicked?(); return true }
+    deinit { timer?.invalidate() }
+    override func accessibilityPerformPress() -> Bool {
+        guard let clicked else { return false }; clicked(); return true
+    }
     override func mouseDown(with event: NSEvent) { clicked?() }
     override func draw(_ dirtyRect: NSRect) {
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduced = reduceMotion || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let t = reduced ? 0 : tick
         let scale = min(bounds.width, bounds.height) / 100
         let transform = NSAffineTransform(); transform.scale(by: scale); transform.concat()
