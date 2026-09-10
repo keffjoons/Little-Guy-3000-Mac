@@ -37,10 +37,10 @@ config = config.replace('code_mode_host = false', 'code_mode_host = false\nenabl
 config = 'model_provider = "fixture"\nmodel = "gpt-5.6-terra"\n'+config
 config += '\n[model_providers.fixture]\nname = "Local test fixture"\nbase_url = "http://127.0.0.1:'+str(server.server_port)+'/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\n'
 (RUN/'config.toml').write_text(config)
-env = {k:v for k,v in os.environ.items() if k.upper() in {'SYSTEMROOT','WINDIR','PATH','PATHEXT','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA','PROGRAMFILES','PROGRAMFILES(X86)','PROGRAMDATA','COMSPEC'}}
+env = {k:v for k,v in os.environ.items() if k.upper() in {'SYSTEMROOT','WINDIR','PATH','PATHEXT','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA','PROGRAMFILES','PROGRAMFILES(X86)','PROGRAMDATA','COMSPEC','HOME','USER','LOGNAME','TMPDIR','LANG'}}
 env['CODEX_HOME'] = str(RUN)
 codex = shutil.which('codex')
-process = subprocess.Popen([codex,'app-server','--listen','stdio://'],cwd=RUN,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',creationflags=subprocess.CREATE_NO_WINDOW)
+process = subprocess.Popen([codex,'app-server','--listen','stdio://'],cwd=RUN,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 messages = queue.Queue(); errors=[]
 def reader():
     for line in process.stdout:

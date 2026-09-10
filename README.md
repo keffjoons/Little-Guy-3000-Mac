@@ -1,6 +1,23 @@
-# Little Guy 3000
+# Little Guy 3000 for Mac
 
 Point. Ask. Know.
+
+Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.com/keffjoons/Little-Guy-3000-Mac), based on [rafsby/Little-Guy-3000](https://github.com/rafsby/Little-Guy-3000). The original Windows source and history are retained; `upstream` points to the original repository.
+
+## macOS preview
+
+A native AppKit Mac companion is available in `src/LittleGuy3000.Mac`. On macOS 14 or later, with Xcode Command Line Tools and Codex installed:
+
+```bash
+./scripts/Build-Mac.sh
+open "artifacts/Little Guy 3000.app"
+```
+
+You can also double-click **Open Little Guy 3000.command**. It builds the app on first launch. Select **Sign in** once to connect Little Guy's separate Codex profile, then type a question and press **⌘Return**. **⌃⌥Space** opens the panel from another app; the menu-bar smiley also opens it.
+
+The Mac preview includes an animated floating companion, streamed questions and follow-ups, model selection, selected-window screenshots with a preview before sending, interface explanations, one-step walkthrough prompts, copyable reply drafts, and macOS spoken answers. See [the Mac guide](docs/MACOS.md) for setup, verification, privacy, and differences from Windows.
+
+## Windows preview
 
 Native Windows 11 companion with a small animated smiley beside your cursor. **Version 0.1.13 is a development preview**, with compact speech bubbles, native UI, capture, local Whisper speech and Codex transport. Production acceptance work remains; see [TESTING.md](TESTING.md).
 
