@@ -1,6 +1,6 @@
 # Little Guy 3000 for Mac
 
-This is a native SwiftUI and AppKit port of the companion's question-and-screen workflow. It runs directly on macOS without Windows, .NET, Wine, Electron, or downloaded speech models. It builds for the current Mac's architecture; the verified build is Apple Silicon on macOS 26.2. The deployment target is macOS 14; Intel and older supported macOS versions still need hardware testing.
+This is a native SwiftUI and AppKit port of the companion's question-and-screen workflow. It runs directly on macOS without Windows, .NET, Wine, or Electron. Voice input uses Apple’s on-device speech recognition; the Mac needs speech resources for its current language. It builds for the current Mac's architecture; the verified build is Apple Silicon on macOS 26.2. The deployment target is macOS 14; Intel and older supported macOS versions still need hardware testing.
 
 ## Build and open
 
@@ -13,27 +13,35 @@ open "artifacts/Little Guy 3000.app"
 
 Double-click `Open Little Guy 3000.command` for subsequent launches. The launcher builds only if the app is missing; rerun the build script after source changes. Quit the running app before rebuilding. The bundle is locally ad-hoc signed, not notarized for public distribution. You can move the complete `.app` bundle after building; it contains its guide configuration. Codex remains a separate installed prerequisite.
 
-Codex is discovered at `/opt/homebrew/bin/codex` or `/usr/local/bin/codex`. For the Homebrew/npm installation, Little Guy resolves the packaged native binary so it directly owns the app-server process. Use **Choose Codex…** for another location. The Mac transport was tested against Codex CLI 0.145.0, using its locally generated experimental app-server schema and the synthetic fixture. Unlike the Windows desktop's version gate, the Mac preview negotiates initialization and reads the live model catalog. Other CLI versions require the fixture check below before relying on them.
+Little Guy first uses an explicitly selected Codex executable, then its dedicated runtime, then `/opt/homebrew/bin/codex` or `/usr/local/bin/codex`. The verified dedicated runtime is Codex CLI **0.154.0**; the previously installed 0.145.0 did not advertise Astra. To install the same runtime (requires npm):
+
+```bash
+npm install --prefix "$HOME/Library/Application Support/LittleGuy3000/runtime" @openai/codex@0.154.0 --no-audit --no-fund
+```
+
+The app resolves npm's native executable and directly owns its helper process. This installation does not change the global Codex CLI. Other CLI versions need protocol and model checks before relying on them.
 
 ## Use
 
-1. Open the app. Its connection starts automatically. Choose **Sign in**, finish the official browser flow, and wait for **Connected**. Send stays disabled until the connection confirms sign-in.
-2. Type a question, then select **Send** or press **⌘Return**. Enter alone adds a new line. Subsequent questions retain the conversation.
-3. To discuss an interface, use **+ → Choose a window…**, choose a window in the macOS sharing picker, select Share Window, and inspect the thumbnail. Use Cancel in the picker, Cancel in the composer, or Escape to cancel. You can also use **+ → Choose an image…** to attach a local image (under 25 MB), or copy an image/image file and use **+ → Paste image** (⌘⇧V). All three paths show a preview and wait for Send. Capturing alone does not send the image; **Send** sends the attached image with your question. The attachment clears after submission so a later request does not silently reuse it as current evidence.
-4. Choose **Explain a window**, **Walkthrough**, or **Draft a reply** for the corresponding prompt. Provide your question or goal. Explain and Draft require a screenshot. For a walkthrough, take a fresh screenshot before asking to check the next step. Replies remain copyable text for your review.
-5. Open **Settings → Voice** and enable **Read answers aloud** for the installed macOS voice. **Stop speech** silences narration. Voice status reports Preparing voice, Speaking, and Finished speaking. **Stop** or Escape cancels an answer by terminating only Little Guy's helper; the app reconnects automatically afterward, preserving your question for retry.
+1. Open Little Guy. A compact bubble appears near the cursor. If disconnected, open its gear button, sign in, and wait for Connected.
+2. In Settings, enable microphone/local speech and Screen Recording. macOS may require authentication and an app restart. These grants let future questions work without a window chooser. If on-device recognition is unavailable, enable Dictation in macOS Keyboard settings to obtain language support; the app never silently uploads microphone audio.
+3. Point at the window you need help with. **Hold Control–Option–Space**, speak, then release. Recording starts after a 300 ms hold; releasing submits the final transcript and a fresh screenshot. Releasing during first-time permission setup cancels the pending recording: finish setup, then hold again. The **Talk** and **Done** buttons provide the same recording flow.
+4. **Tap Control–Option–Space** to type instead. Press Send or Command–Return. The screen switch turns automatic context off for voice/text-only questions. The window's app name appears beside it. Little Guy does not listen continuously.
+5. The answer streams into the bubble and is spoken when Read answers aloud is enabled. Stop/Escape cancels recording, capture, or the answer. Stop voice silences narration. Full answer opens the larger transcript; its sidebar and model menu can start other modes/conversations.
 
-**⌃⌥Space** opens the panel. Closing the window leaves the app in the menu bar. Click the floating smiley to reopen it. Enable **Settings → Companion → Follow the pointer** to have it follow while the panel is hidden. The menu offers Hide and Quit. **New conversation** clears the visible answer, question, and attachment and starts a fresh model conversation. Changing mode or model starts a new conversation while preserving your unsent draft and attachment. Reconnecting restores up to 40,000 characters of completed conversation text; old images and interrupted answers are not resubmitted.
+The pointer selects the topmost ordinary window before Little Guy appears. Follow-ups capture the same selected window afresh; pointing elsewhere and invoking the shortcut selects a new target. If a window closes, permission is missing, or capture fails, the question stays ready to retry and is not silently sent without its requested context. Captures use `SCShareableContent` plus `SCScreenshotManager`, bounded to 2048 pixels, with no audio or cursor. Nothing continuously records the screen.
 
-Screen capture uses SCContentSharingPicker and a short SCStream on macOS 14+. Little Guy hides its main window during selection, receives the first complete frame from the chosen window, and stops the stream before showing the preview. Audio is disabled. The separate screenshot API was removed because its access check rejected picker-only authorization on the tested Mac. Select the window you want to share each time; the app takes one still image and ends the selection session. No persistent screen-recording grant or Accessibility permission is needed. Capture cancellation and a 90-second selection timeout restore the app controls. Typed questions need no screen access. See [Apple’s screen-sharing picker overview](https://developer.apple.com/videos/play/wwdc2023/10136/).
+The larger window retains **+ → Choose a window…**, local image import, and pasted images. Manual window selection uses the macOS sharing picker and its authorized short stream. These remain useful when sharing a specific image. Explain, Walkthrough, and Draft a reply offer textual guidance and copyable drafts. Click a mode or choose a model to leave compact Astra mode and begin that conversation.
+
+The menu-bar icon and floating character reopen the bubble. Settings controls pointer following, reduced motion, and spoken replies. Closing the full window leaves the menu-bar app running. Hide stops the current interaction; Quit stops the app and its helper. New clears the conversation. Reconnecting restores completed text history, without resending old images.
 
 ## Privacy and boundaries
 
 - Codex runs as an owned stdio child in `~/Library/Application Support/LittleGuy3000/codex`, with an empty working directory and a separate sign-in. It does not read or overwrite `~/.codex/config.toml` or copy the main Codex app's authentication files.
 - The bundle's restrictions are extracted from the existing C# `GuideConfiguration` during the build. The connection disables action tools, uses an empty environment list and capability-root list, requests read-only/never-approve behavior, and refuses server action requests. Synthetic inspection of the actual model request found no exposed tools.
-- Questions and selected screenshots go to the connected cloud model when you press Send. The model may retain earlier images as conversation context, even after their thumbnail clears. Use New conversation to start without that context.
+- Questions and screenshots go to the connected cloud model when you press Send or finish a voice question. Quick mode explicitly requests `gpt-6-astra` and `effort: low`; it reports an error rather than substituting a model if unavailable. The model may retain earlier images as conversation context, even after their thumbnail clears. Use New conversation to start without that context.
 - The UI keeps its conversation in memory. It does not implement automatic history storage. Codex uses ephemeral threads and disabled history; its own operational/account state can still exist in the separate profile. A synthetic marker scan found no literal test prompt/image output persisted; this is not a comprehensive storage audit.
-- Selected-window images are captured directly into memory, bounded to 2048 pixels on the longest edge, and shown as a thumbnail before submission. Little Guy does not write temporary screenshots or print captured content in diagnostic logs.
+- Window images are captured directly into memory and bounded to 2048 pixels on the longest edge. Quick mode automatically submits the fresh image with your question; manual attachments show a preview before Send. Little Guy does not write temporary screenshots or print captured content in diagnostic logs.
 - This preview does not exclude its windows from screen recordings. Hide Little Guy from its menu when needed.
 
 ## Verification
@@ -46,13 +54,25 @@ Screen capture uses SCContentSharingPicker and a short SCStream on macOS 14+. Li
 
 The first command also rejects incomplete/invalid capture frames and checks sign-in gating, draft/model preservation, image retry, cancellation, conversation recovery, fast completion, and image sizing/PNG encoding. It compiles and exercises the Swift transport against a deterministic stdio fixture: split JSONL writes, Unicode, response limits, stale turn/thread rejection, denied approvals and tools, protocol errors, pending-request cancellation, and reconnect.
 
-The optional `--voice` check verifies that the production voice selection generates non-silent audio and completes. It does not record a microphone.
+The default suite also tests tap/hold/release, final-only transcription submission, Astra Low parameters, fresh follow-up capture, missing permissions/model, cancelled late callbacks, and pointer hit testing on negative monitor coordinates.
+
+The optional `--voice` check verifies that the production spoken-output voice selection generates non-silent audio and completes. It does not record a microphone.
 
 The optional `--codex-fixture` command also launches the real installed Codex runtime against a local synthetic HTTP model fixture. It checks completion, isolated account state, image delivery, and actual tool exposure. It uses no cloud model request or real screen capture. A sandbox must permit binding a loopback port and launching Codex for this check.
 
 `scripts/Build-Mac.sh` also verifies the finished bundle's local code signature. Manual desktop acceptance should cover sign-in, a real streamed answer, screenshot permission/selection/cancellation, image interpretation, follow-ups, copy, speech, menu/hotkey reopen, and quit with no surviving owned helper.
 
-### Version 0.2.1 — September 10, 2026
+### Version 0.3.0 — September 10, 2026
+
+- Compact native bubble built and visually inspected, including connection, error, and answer states. The installed app returned “Little Guy quick mode works.” and reported completed spoken playback. The app-local shortcut reopened the bubble from the full window without inserting a space; physical global hold/release remains a device acceptance check.
+- Dedicated Codex 0.154.0 advertises Astra Low. Real Astra Low recognized the synthetic green square / MAPLE 472 and retained text context across reconnect.
+- Protocol, session, image, frame, and quick interaction regression tests passed. The upgraded runtime's local backend fixture confirmed image delivery, empty model tool exposure, and completion.
+- Automatic capture and microphone activation still require local macOS consent on this installation: changing the existing Screen Recording entry requested the account password, and the computer-use tool cannot operate the microphone consent system dialog. No protected settings or prompts were bypassed.
+- Consequently, real automatic pointer capture and physical microphone transcription are **not yet device-verified**. The hold/release lifecycle and capture failure/cancellation behavior were tested with injected fixtures. Verify them once macOS permissions are completed.
+- Ad-hoc signing may require refreshing macOS grants after rebuilding. This is not a notarized public release.
+
+### Version 0.2.1 — September 10, 2026 (historical)
+
 
 - Installed bundle: `/Applications/Little Guy 3000.app`; source: `~/Projects/Little-Guy-3000-Mac`.
 - ChatGPT Pro sign-in completed through the official browser flow and persisted across app restarts.
@@ -73,4 +93,4 @@ For the opt-in cloud image/follow-up check, quit Little Guy, build it, then run 
 
 ## Remaining Windows-only features
 
-The Mac preview does not yet port Windows UI Automation, pointed-control capture, ring/arrow overlays, circle selection, the structured walkthrough verification state machine, automatic reply-field insertion, Spotify/media commands, the multi-card reply pad, protected history/pins, Google Drive research/export, Kokoro voices, or push-to-talk Whisper transcription. Its walkthrough and reply modes are text guidance. Use native macOS text input for questions. The Windows project and its release workflow remain separate.
+The Mac preview does not yet port Windows UI Automation, pointed-control capture, ring/arrow overlays, circle selection, the structured walkthrough verification state machine, automatic reply-field insertion, Spotify/media commands, the multi-card reply pad, protected history/pins, Google Drive research/export, Kokoro voices, or push-to-talk Whisper transcription. Its walkthrough and reply modes are text guidance. Mac push-to-talk uses Apple on-device speech rather than Whisper. The Windows project and its release workflow remain separate.

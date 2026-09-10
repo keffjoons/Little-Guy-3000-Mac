@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 struct CompanionRootView: View {
     @State var session: CompanionSession
     let speech: SpeechController
+    let quick: QuickCompanion
+    let enableScreen: () -> Void
+    let enableVoice: () -> Void
     let capture: () -> Void
     let loadImage: (URL) -> Void
     let pasteImage: () -> Void
@@ -30,7 +33,7 @@ struct CompanionRootView: View {
         }
         .frame(minWidth: 780, minHeight: 580)
         .sheet(isPresented: $session.settingsVisible) {
-            CompanionSettings(session: session, speech: speech, chooseCodex: chooseCodex, stopSpeech: stopSpeech, previewSpeech: previewSpeech)
+            CompanionSettings(session: session, speech: speech, quick: quick, enableScreen: enableScreen, enableVoice: enableVoice, chooseCodex: chooseCodex, stopSpeech: stopSpeech, previewSpeech: previewSpeech)
         }
         .onAppear { composerFocused = true }
         .fileImporter(isPresented: $importingImage, allowedContentTypes: [.image]) { result in
@@ -295,6 +298,9 @@ private struct CompanionSettings: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: CompanionSession
     let speech: SpeechController
+    @Bindable var quick: QuickCompanion
+    let enableScreen: () -> Void
+    let enableVoice: () -> Void
     let chooseCodex: () -> Void
     let stopSpeech: () -> Void
     let previewSpeech: () -> Void
@@ -322,18 +328,21 @@ private struct CompanionSettings: View {
                     LabeledContent("Show Little Guy", value: session.shortcutAvailable ? "Control–Option–Space" : "Shortcut unavailable; use the menu bar")
                 }
                 Section("Voice") {
+                    Button("Enable microphone and local speech…", action: enableVoice)
                     Toggle("Read answers aloud", isOn: $session.speakAnswers).onChange(of: session.speakAnswers) { _, enabled in if !enabled { stopSpeech() } }
                     HStack { Button("Preview voice", action: previewSpeech); Button("Stop speech", action: stopSpeech) }
                     if !speech.status.isEmpty { Text(speech.status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("speechStatus") }
-                    Text("Uses your Mac’s installed voice. You can also use macOS Dictation to enter a question.")
+                    Text("Hold Control–Option–Space to talk; release to ask. Speech is transcribed on this Mac. Answers use your Mac’s installed voice.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Your privacy") {
-                    Text("Questions and attached images go to your connected Codex model. Nothing is sent until you press Send. Conversations stay in memory until you start a new one or quit.")
+                    Toggle("Capture the pointed window for quick questions", isOn: $quick.screenEnabled)
+                    Button("Enable Screen Recording…", action: enableScreen)
+                    Text("Quick questions use Astra with Low reasoning. Sending a question or releasing push-to-talk sends your words and a fresh image of the pointed window when screen context is on. Microphone audio stays on this Mac. Conversations stay in memory until you start a new one or quit.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)
-        }.frame(width: 500, height: 620)
+        }.frame(width: 500, height: 720)
     }
 }
 

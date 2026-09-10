@@ -6,16 +6,16 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version 0.2.1) is available in `src/LittleGuy3000.Mac`. On macOS 14 or later, with Xcode Command Line Tools and Codex installed:
+A native SwiftUI and AppKit Mac companion (version **0.3.0**) opens as a small bubble beside your cursor. **Tap Control–Option–Space to type, or hold it to speak and release to ask.** With screen context enabled, it automatically attaches a fresh image of the window under your pointer. Quick answers use **GPT-6 Astra with Low reasoning** and can be spoken aloud.
+
+On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 
 ```bash
 ./scripts/Build-Mac.sh
 open "artifacts/Little Guy 3000.app"
 ```
 
-You can also double-click **Open Little Guy 3000.command**. It builds the app on first launch. Select **Sign in** once to connect Little Guy's separate Codex profile, then type a question and press **⌘Return**. **⌃⌥Space** opens the panel from another app; the menu-bar smiley also opens it.
-
-The Mac preview includes a native sidebar, conversation transcript, attachment composer, grouped Settings, and an animated floating companion, streamed questions and follow-ups, model selection, selected-window screenshots with a preview before sending, interface explanations, one-step walkthrough prompts, copyable reply drafts, and macOS spoken answers. See [the Mac guide](docs/MACOS.md) for setup, verification, privacy, and differences from Windows.
+First-time setup needs ChatGPT sign-in plus macOS Microphone, Speech Recognition, and Screen Recording permissions. Voice transcription runs on-device; the app explains when local speech support is unavailable. The Talk/Done buttons also work without holding a key. Settings and Full answer open the larger window. See [the Mac guide](docs/MACOS.md) for setup, tested behavior, and remaining device acceptance checks.
 
 ## Windows preview
 

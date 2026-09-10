@@ -15,6 +15,8 @@ import Foundation
         defer { session.shutdown() }
         await session.connect(executable: executable, home: home, configuration: config)
         guard session.connection == .ready else { throw CompanionError.message(session.error ?? "Sign in in Little Guy first") }
+        session.setCompact(true)
+        guard session.quickModelAvailable else { throw CompanionError.message("Astra Low is missing from the connected model catalog") }
         session.imageData = try Data(contentsOf: URL(fileURLWithPath: ".local/image-test-card.png"))
         session.draft = "What colour is the square and what verification code is shown in this image? Answer in one sentence."
         await session.send()

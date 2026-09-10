@@ -27,7 +27,9 @@ final class CodexConnection: CodexTransport {
 
     static func executable() -> String? {
         let saved = UserDefaults.standard.string(forKey: "codexExecutable")
-        let candidates = [saved, "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
+        let companionRuntime = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LittleGuy3000/runtime/node_modules/.bin/codex").path
+        let candidates = [saved, companionRuntime, "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
         guard let path = candidates.compactMap({ $0 }).first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
         return nativeExecutable(path)
     }
@@ -96,7 +98,7 @@ final class CodexConnection: CodexTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.2.1"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.3.0"],
                 "capabilities": ["experimentalApi": true]
             ])
             try write(["method": "initialized"])

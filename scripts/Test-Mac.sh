@@ -19,6 +19,12 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
     src/LittleGuy3000.Mac/ScreenCapturePicker.swift tests/Mac/ScreenFrameTests.swift -o .local/mac-screen-frame-tests
 .local/mac-screen-frame-tests
+xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+    src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CompanionSession.swift \
+    src/LittleGuy3000.Mac/ImageAttachment.swift src/LittleGuy3000.Mac/PointerCapture.swift \
+    src/LittleGuy3000.Mac/VoiceInput.swift src/LittleGuy3000.Mac/QuickCompanion.swift \
+    tests/Mac/QuickTests.swift -o .local/mac-quick-tests
+.local/mac-quick-tests
 if [ "${1:-}" = "--codex-fixture" ]; then
     python3 scripts/Verify-Codex.py
 fi

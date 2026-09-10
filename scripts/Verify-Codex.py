@@ -39,7 +39,8 @@ config += '\n[model_providers.fixture]\nname = "Local test fixture"\nbase_url = 
 (RUN/'config.toml').write_text(config)
 env = {k:v for k,v in os.environ.items() if k.upper() in {'SYSTEMROOT','WINDIR','PATH','PATHEXT','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA','PROGRAMFILES','PROGRAMFILES(X86)','PROGRAMDATA','COMSPEC','HOME','USER','LOGNAME','TMPDIR','LANG'}}
 env['CODEX_HOME'] = str(RUN)
-codex = shutil.which('codex')
+companion_runtime = pathlib.Path.home()/'Library/Application Support/LittleGuy3000/runtime/node_modules/.bin/codex'
+codex = str(companion_runtime) if companion_runtime.is_file() else shutil.which('codex')
 process = subprocess.Popen([codex,'app-server','--listen','stdio://'],cwd=RUN,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 messages = queue.Queue(); errors=[]
 def reader():
