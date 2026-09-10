@@ -1,8 +1,6 @@
 import AppKit
-import AVFoundation
 import Carbon
 import SwiftUI
-import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -18,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var localMonitor: Any?
     private var hidden = false
     private var terminating = false
-    private let speech = AVSpeechSynthesizer()
+    private let speech = SpeechController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow(); buildCompanion(); buildMenu(); registerHotKey()
@@ -41,8 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.minSize = NSSize(width: 800, height: 620)
         window.delegate = self; window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("LittleGuyMainWindow-v2"); window.center()
-        window.contentView = NSHostingView(rootView: CompanionRootView(session: session,
-            capture: { [weak self] in self?.capture() }, attachImage: { [weak self] in self?.attachImage() },
+        window.contentView = NSHostingView(rootView: CompanionRootView(session: session, speech: speech,
+            capture: { [weak self] in self?.capture() }, loadImage: { [weak self] url in self?.loadImage(url) },
+            pasteImage: { [weak self] in self?.pasteImage() },
             cancelCapture: { [weak self] in self?.picker?.cancel() },
             chooseCodex: { [weak self] in self?.chooseCodex() }, stopSpeech: { [weak self] in self?.stopSpeech() },
             previewSpeech: { [weak self] in self?.speak("Hi, I’m Little Guy. I’m here when you need a hand.") }))
@@ -126,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func capture() {
         guard !session.busy, !session.isCapturing else { return }
         session.isCapturing = true; session.error = nil; session.notice = nil
-        companion.orderOut(nil)
+        companion.orderOut(nil); window.orderOut(nil)
         let picker = ScreenCapturePicker(); self.picker = picker
         picker.present { [weak self] result in
             guard let self, !self.terminating else { return }
@@ -141,28 +140,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func attachImage() {
-        // Let the SwiftUI menu finish tracking before presenting AppKit's file panel.
-        DispatchQueue.main.async { [weak self] in self?.presentImagePicker() }
+    private func loadImage(_ url: URL) {
+        guard !session.busy, !session.isCapturing else { return }
+        do {
+            session.imageData = try ImageAttachment.load(url)
+            session.imageName = url.lastPathComponent; session.error = nil; session.notice = nil
+        } catch { session.error = error.localizedDescription }
     }
 
-    private func presentImagePicker() {
+    private func pasteImage() {
         guard !session.busy, !session.isCapturing else { return }
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.image]
-        panel.canChooseFiles = true; panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
-        panel.message = "Choose an image to review before sending it to Little Guy."
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                guard ((attributes[.size] as? NSNumber)?.intValue ?? Int.max) < 25 * 1024 * 1024,
-                      let image = NSImage(contentsOf: url), let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                    throw CompanionError.message("Choose a supported image smaller than 25 MB.")
-                }
-                self.session.imageData = try ImageAttachment.png(cgImage)
-                self.session.imageName = url.lastPathComponent; self.session.error = nil
-            } catch { self.session.error = error.localizedDescription }
-        }
+        do {
+            let pasteboard = NSPasteboard.general
+            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], let url = urls.first {
+                session.imageData = try ImageAttachment.load(url); session.imageName = url.lastPathComponent
+            } else if let image = NSImage(pasteboard: pasteboard), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                session.imageData = try ImageAttachment.png(cg); session.imageName = "Pasted image"
+            } else { throw CompanionError.message("Copy an image or image file, then choose Paste image.") }
+            session.error = nil; session.notice = nil
+        } catch { session.error = error.localizedDescription }
     }
 
     private func chooseCodex() {
@@ -175,12 +171,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func speak(_ text: String) {
-        stopSpeech()
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.language.languageCode?.identifier ?? "en")
-        speech.speak(utterance)
+        speech.speak(text)
     }
-    private func stopSpeech() { speech.stopSpeaking(at: .immediate) }
+    private func stopSpeech() { speech.stop() }
     private func cancelInteraction() {
         stopSpeech()
         if session.isCapturing { picker?.cancel() }

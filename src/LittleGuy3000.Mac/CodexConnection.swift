@@ -96,7 +96,7 @@ final class CodexConnection: CodexTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.2.0"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.2.1"],
                 "capabilities": ["experimentalApi": true]
             ])
             try write(["method": "initialized"])

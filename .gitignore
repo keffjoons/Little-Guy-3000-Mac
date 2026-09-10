@@ -3,9 +3,9 @@
 **/obj/
 .vs/
 .local/
+.DS_Store
 artifacts/
 TestResults/
 *.user
 *.pfx
 *.cer
-

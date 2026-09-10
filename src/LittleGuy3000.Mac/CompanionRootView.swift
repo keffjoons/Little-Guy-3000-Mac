@@ -1,15 +1,19 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CompanionRootView: View {
     @State var session: CompanionSession
+    let speech: SpeechController
     let capture: () -> Void
-    let attachImage: () -> Void
+    let loadImage: (URL) -> Void
+    let pasteImage: () -> Void
     let cancelCapture: () -> Void
     let chooseCodex: () -> Void
     let stopSpeech: () -> Void
     let previewSpeech: () -> Void
     @FocusState private var composerFocused: Bool
+    @State private var importingImage = false
 
     var body: some View {
         NavigationSplitView {
@@ -26,9 +30,15 @@ struct CompanionRootView: View {
         }
         .frame(minWidth: 780, minHeight: 580)
         .sheet(isPresented: $session.settingsVisible) {
-            CompanionSettings(session: session, chooseCodex: chooseCodex, stopSpeech: stopSpeech, previewSpeech: previewSpeech)
+            CompanionSettings(session: session, speech: speech, chooseCodex: chooseCodex, stopSpeech: stopSpeech, previewSpeech: previewSpeech)
         }
         .onAppear { composerFocused = true }
+        .fileImporter(isPresented: $importingImage, allowedContentTypes: [.image]) { result in
+            switch result {
+            case .success(let url): loadImage(url)
+            case .failure(let error): session.error = error.localizedDescription
+            }
+        }
     }
 
     private var sidebar: some View {
@@ -193,7 +203,9 @@ struct CompanionRootView: View {
                 HStack(spacing: 12) {
                     Menu {
                         Button("Choose a window…", systemImage: "macwindow", action: capture)
-                        Button("Choose an image…", systemImage: "photo", action: attachImage)
+                        Button("Choose an image…", systemImage: "photo") { importingImage = true }
+                        Button("Paste image", systemImage: "doc.on.clipboard", action: pasteImage)
+                            .keyboardShortcut("v", modifiers: [.command, .shift])
                     } label: { Image(systemName: "plus").font(.system(size: 16)) }
                     .menuStyle(.borderlessButton).fixedSize().disabled(session.busy || session.isCapturing)
                     .help("Attach a window or image").accessibilityLabel("Add attachment")
@@ -225,7 +237,10 @@ struct CompanionRootView: View {
             HStack {
                 Text("Only what you choose to share. You stay in control.").font(.system(size: 10)).foregroundStyle(.tertiary)
                 Spacer()
-                if session.speakAnswers { Button("Stop speech", action: stopSpeech).buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary) }
+                if !speech.status.isEmpty {
+                    Text(speech.status).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Button("Stop speech", action: stopSpeech).buttonStyle(.plain).font(.system(size: 10)).foregroundStyle(.secondary)
+                }
             }.padding(.horizontal, 3)
         }.padding(.horizontal, 24).padding(.top, 10).padding(.bottom, 18)
     }
@@ -279,6 +294,7 @@ private struct MessageView: View {
 private struct CompanionSettings: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: CompanionSession
+    let speech: SpeechController
     let chooseCodex: () -> Void
     let stopSpeech: () -> Void
     let previewSpeech: () -> Void
@@ -308,6 +324,7 @@ private struct CompanionSettings: View {
                 Section("Voice") {
                     Toggle("Read answers aloud", isOn: $session.speakAnswers).onChange(of: session.speakAnswers) { _, enabled in if !enabled { stopSpeech() } }
                     HStack { Button("Preview voice", action: previewSpeech); Button("Stop speech", action: stopSpeech) }
+                    if !speech.status.isEmpty { Text(speech.status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("speechStatus") }
                     Text("Uses your Mac’s installed voice. You can also use macOS Dictation to enter a question.")
                         .font(.caption).foregroundStyle(.secondary)
                 }

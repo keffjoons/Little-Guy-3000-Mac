@@ -16,7 +16,7 @@ config = '\n'.join(line.strip() for line in match.group(1).splitlines()) + '\n'
 shutil.copyfile(root/'src/LittleGuy3000.Desktop/Assets/Square150x150Logo.scale-200.png', app/'Contents/Resources/LittleGuy.png')
 info = dict(CFBundleExecutable='LittleGuy3000', CFBundleIdentifier='com.littleguy3000.mac',
             CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000', CFBundleIconFile='LittleGuy.png',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.2.0', CFBundleVersion='2',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.2.1', CFBundleVersion='3',
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSScreenCaptureUsageDescription='Attach only the screen area you select to your question.')
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(info, f)

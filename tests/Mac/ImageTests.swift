@@ -23,6 +23,16 @@ import CoreText
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".local/image-test-card.png")
         try data.write(to: url)
         precondition(NSBitmapImageRep(data: data)?.pixelsWide == 640)
+        let loaded = try ImageAttachment.load(url)
+        precondition(NSBitmapImageRep(data: loaded)?.pixelsWide == 640)
+        do {
+            _ = try ImageAttachment.load(URL(string: "https://example.com/image.png")!)
+            preconditionFailure("Remote URLs must not be loaded")
+        } catch {}
+        let invalid = url.deletingLastPathComponent().appendingPathComponent("invalid-image-test.txt")
+        try Data("Not an image".utf8).write(to: invalid)
+        defer { try? FileManager.default.removeItem(at: invalid) }
+        do { _ = try ImageAttachment.load(invalid); preconditionFailure("Invalid images must be rejected") } catch {}
         print("PASS: image size limit, aspect ratio, PNG encoding; synthetic visual fixture created")
     }
 }

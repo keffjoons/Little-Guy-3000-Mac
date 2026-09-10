@@ -1,6 +1,18 @@
 import AppKit
 
 enum ImageAttachment {
+    static func load(_ url: URL) throws -> Data {
+        guard url.isFileURL else { throw CompanionError.message("Choose an image stored on your Mac.") }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard ((attributes[.size] as? NSNumber)?.intValue ?? Int.max) < 25 * 1024 * 1024,
+              let image = NSImage(contentsOf: url), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw CompanionError.message("Choose a supported image smaller than 25 MB.")
+        }
+        return try png(cg)
+    }
+
     static func png(_ image: CGImage) throws -> Data {
         let scale = min(1, 2048.0 / Double(max(image.width, image.height)))
         let width = max(1, Int(Double(image.width) * scale)), height = max(1, Int(Double(image.height) * scale))

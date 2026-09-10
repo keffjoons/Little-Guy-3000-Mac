@@ -6,7 +6,7 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version 0.2.0) is available in `src/LittleGuy3000.Mac`. On macOS 14 or later, with Xcode Command Line Tools and Codex installed:
+A native SwiftUI and AppKit Mac companion (version 0.2.1) is available in `src/LittleGuy3000.Mac`. On macOS 14 or later, with Xcode Command Line Tools and Codex installed:
 
 ```bash
 ./scripts/Build-Mac.sh
