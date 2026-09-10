@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+ <ItemGroup>
+  <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
+  <Compile Include="..\..\src\LittleGuy3000.Desktop\Platform\Native.cs" Link="Native.cs"/>
+  <Compile Include="..\..\src\LittleGuy3000.Desktop\Platform\CaptureVisibility.cs" Link="CaptureVisibility.cs"/>
+  <Compile Include="..\..\src\LittleGuy3000.Desktop\Platform\ReplyComposer.cs" Link="ReplyComposer.cs"/>
+  <ProjectReference Include="..\..\src\LittleGuy3000.Core\LittleGuy3000.Core.csproj"/>
+  <ProjectReference Include="..\..\src\LittleGuy3000.Codex\LittleGuy3000.Codex.csproj"/>
+  <PackageReference Include="System.Speech" Version="10.0.12"/>
+  <PackageReference Include="NAudio" Version="2.2.1"/>
+  <PackageReference Include="Whisper.net" Version="1.9.1"/>
+  <PackageReference Include="Whisper.net.Runtime" Version="1.9.1"/>
+  <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1"/>
+  <Compile Include="..\..\src\LittleGuy3000.Desktop\Services\LocalSpeechService.cs" Link="LocalSpeechService.cs"/>
+  <Compile Include="..\..\src\LittleGuy3000.Desktop\Companion\SmileyRenderer.cs" Link="SmileyRenderer.cs"/>
+ </ItemGroup>
+</Project>

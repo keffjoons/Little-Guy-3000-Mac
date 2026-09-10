@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LittleGuy3000.Desktop (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "LittleGuy3000.Desktop (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
