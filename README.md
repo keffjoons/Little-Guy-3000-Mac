@@ -6,7 +6,7 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version **0.3.0**) opens as a small bubble beside your cursor. **Tap Control–Option–Space to type, or hold it to speak and release to ask.** With screen context enabled, it automatically attaches a fresh image of the window under your pointer. Quick answers use **GPT-6 Astra with Low reasoning** and can be spoken aloud.
+A native SwiftUI and AppKit Mac companion (version **0.4.0**) opens as a small bubble beside your cursor. **Tap Control–Option–Space to type, or hold it to speak and release to ask.** With screen context enabled, it automatically attaches a fresh image of the window under your pointer. Quick answers use **GPT-6 Astra with Low reasoning** and are read aloud through **Codex voice** using your ChatGPT sign-in. Microphone transcription stays on-device.
 
 On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 

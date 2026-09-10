@@ -1,5 +1,11 @@
 # Little Guy 3000 — development preview privacy
 
+## Mac preview
+
+The Mac port uses Apple on-device microphone transcription and Codex cloud voice for spoken replies. When Read answers aloud is enabled, answer text is sent to a separate ephemeral Codex realtime session through the existing Little Guy ChatGPT sign-in. WebRTC receives generated audio and sends a silent audio track to keep the duplex transport active; it does not capture or upload microphone audio. Playback uses an in-memory, nonpersistent WebKit page and stops when dismissed, interrupted, or disabled. The Mac-specific capture and account boundaries are documented in [the Mac guide](docs/MACOS.md#privacy-and-boundaries).
+
+## Windows preview
+
 Screen context and voice start disabled. When screen context is enabled, invoking Little Guy captures the selected application window on demand. Questions and attached window images are sent through your signed-in Codex connection for AI processing. Capture is not continuous, and moving the smiley does not take screenshots. Selected windows can contain private information; this preview does not implement automatic sensitive-field redaction.
 
 Settings includes a process-name exclusion list, initially containing 1Password, KeePass, KeePassXC and Bitwarden. Exclusions are a convenience control, not comprehensive sensitive-content detection. Little Guy does not read your clipboard automatically. A user-triggered Copy action writes the answer to the clipboard.

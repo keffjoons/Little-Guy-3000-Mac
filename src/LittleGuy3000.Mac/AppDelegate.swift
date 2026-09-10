@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var localShortcutDown = false
     private var hidden = false
     private var terminating = false
-    private let speech = SpeechController()
+    private lazy var speech = SpeechController(backend: session)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow(); buildCompanion(); buildBubble(); buildMenu(); registerHotKey()
@@ -156,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else if anchor == .zero { anchor = point }
         session.setCompact(true); session.settingsVisible = false
         quick.screenPermitted = PointerCapture.permitted
+        if window.isVisible { stopSpeech() }
         hidden = false; window.orderOut(nil)
         positionBubble(); bubble.makeKeyAndOrderFront(nil)
     }
@@ -200,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func capture() {
         guard !session.busy, !session.isCapturing else { return }
+        stopSpeech()
         session.isCapturing = true; session.error = nil; session.notice = nil
         quick.cancel(); bubble.orderOut(nil); companion.orderOut(nil); window.orderOut(nil)
         let picker = ScreenCapturePicker(); self.picker = picker
@@ -247,7 +249,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func speak(_ text: String) {
-        speech.speak(text)
+        guard let host = bubble.isVisible ? bubble.contentView : window.contentView,
+              host.window?.isVisible == true else { return }
+        speech.speak(text, in: host)
     }
     private func authorizeVoice() {
         Task {
@@ -266,6 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func showPanel() {
         guard !terminating else { return }
+        stopSpeech()
         quick.cancel(); bubble.orderOut(nil)
         hidden = false; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
     }
@@ -278,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showQuick(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { stopSpeech(); sender.orderOut(nil); return false }
     func applicationWillTerminate(_ notification: Notification) {
         terminating = true; quick.cancel(); companionTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }

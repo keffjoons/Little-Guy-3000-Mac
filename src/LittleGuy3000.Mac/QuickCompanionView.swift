@@ -34,7 +34,7 @@ struct QuickCompanionView: View {
                     Button("Full answer", action: details)
                     Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(answer.text, forType: .string) }
                     Spacer()
-                    Button("New") { session.newConversation() }.disabled(quick.active || session.busy)
+                    Button("New") { speech.stop(); session.newConversation() }.disabled(quick.active || session.busy)
                 }.font(.caption).buttonStyle(.plain).foregroundStyle(.secondary)
             } else {
                 Text("What do you need a hand with?").font(.system(size: 16, weight: .medium))

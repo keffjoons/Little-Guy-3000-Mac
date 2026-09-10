@@ -16,6 +16,12 @@ protocol CodexTransport: AnyObject {
 }
 
 @MainActor
+protocol CodexVoiceBackend: AnyObject {
+    var voiceNotification: ((String, [String: Any]) -> Void)? { get set }
+    func voiceRequest(_ method: String, _ params: [String: Any]) async throws -> [String: Any]
+}
+
+@MainActor
 final class CodexConnection: CodexTransport {
     private var process: Process?
     private var input: FileHandle?
@@ -98,7 +104,7 @@ final class CodexConnection: CodexTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.3.0"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.4.0"],
                 "capabilities": ["experimentalApi": true]
             ])
             try write(["method": "initialized"])

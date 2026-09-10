@@ -332,7 +332,7 @@ private struct CompanionSettings: View {
                     Toggle("Read answers aloud", isOn: $session.speakAnswers).onChange(of: session.speakAnswers) { _, enabled in if !enabled { stopSpeech() } }
                     HStack { Button("Preview voice", action: previewSpeech); Button("Stop speech", action: stopSpeech) }
                     if !speech.status.isEmpty { Text(speech.status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("speechStatus") }
-                    Text("Hold Control–Option–Space to talk; release to ask. Speech is transcribed on this Mac. Answers use your Mac’s installed voice.")
+                    Text("Hold Control–Option–Space to talk; release to ask. Your speech is transcribed on this Mac. Answers are read aloud by Codex voice through your ChatGPT connection.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Your privacy") {

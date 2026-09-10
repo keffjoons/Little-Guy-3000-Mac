@@ -27,7 +27,7 @@ The app resolves npm's native executable and directly owns its helper process. T
 2. In Settings, enable microphone/local speech and Screen Recording. macOS may require authentication and an app restart. These grants let future questions work without a window chooser. If on-device recognition is unavailable, enable Dictation in macOS Keyboard settings to obtain language support; the app never silently uploads microphone audio.
 3. Point at the window you need help with. **Hold Control–Option–Space**, speak, then release. Recording starts after a 300 ms hold; releasing submits the final transcript and a fresh screenshot. Releasing during first-time permission setup cancels the pending recording: finish setup, then hold again. The **Talk** and **Done** buttons provide the same recording flow.
 4. **Tap Control–Option–Space** to type instead. Press Send or Command–Return. The screen switch turns automatic context off for voice/text-only questions. The window's app name appears beside it. Little Guy does not listen continuously.
-5. The answer streams into the bubble and is spoken when Read answers aloud is enabled. Stop/Escape cancels recording, capture, or the answer. Stop voice silences narration. Full answer opens the larger transcript; its sidebar and model menu can start other modes/conversations.
+5. The answer streams into the bubble and is spoken by Codex voice when Read answers aloud is enabled. Voice output uses the same Little Guy ChatGPT sign-in and needs internet access. Stop/Escape cancels recording, capture, or the answer. Stop voice silences narration. Full answer opens the larger transcript; its sidebar and model menu can start other modes/conversations.
 
 The pointer selects the topmost ordinary window before Little Guy appears. Follow-ups capture the same selected window afresh; pointing elsewhere and invoking the shortcut selects a new target. If a window closes, permission is missing, or capture fails, the question stays ready to retry and is not silently sent without its requested context. Captures use `SCShareableContent` plus `SCScreenshotManager`, bounded to 2048 pixels, with no audio or cursor. Nothing continuously records the screen.
 
@@ -41,6 +41,7 @@ The menu-bar icon and floating character reopen the bubble. Settings controls po
 - The bundle's restrictions are extracted from the existing C# `GuideConfiguration` during the build. The connection disables action tools, uses an empty environment list and capability-root list, requests read-only/never-approve behavior, and refuses server action requests. Synthetic inspection of the actual model request found no exposed tools.
 - Questions and screenshots go to the connected cloud model when you press Send or finish a voice question. Quick mode explicitly requests `gpt-6-astra` and `effort: low`; it reports an error rather than substituting a model if unavailable. The model may retain earlier images as conversation context, even after their thumbnail clears. Use New conversation to start without that context.
 - The UI keeps its conversation in memory. It does not implement automatic history storage. Codex uses ephemeral threads and disabled history; its own operational/account state can still exist in the separate profile. A synthetic marker scan found no literal test prompt/image output persisted; this is not a comprehensive storage audit.
+- Spoken replies use the Codex app-server realtime WebRTC v3 transport, verified with runtime 0.154.0 and the existing ChatGPT sign-in. Each reply creates a separate ephemeral speech session containing only the answer text. A nonpersistent WebKit player receives the audio and sends a silent track; it never requests microphone access. Apple on-device transcription remains the input path. This experimental Codex interface can change with runtime updates; a voice failure leaves the written answer available and shows an error.
 - Window images are captured directly into memory and bounded to 2048 pixels on the longest edge. Quick mode automatically submits the fresh image with your question; manual attachments show a preview before Send. Little Guy does not write temporary screenshots or print captured content in diagnostic logs.
 - This preview does not exclude its windows from screen recordings. Hide Little Guy from its menu when needed.
 
@@ -56,11 +57,18 @@ The first command also rejects incomplete/invalid capture frames and checks sign
 
 The default suite also tests tap/hold/release, final-only transcription submission, Astra Low parameters, fresh follow-up capture, missing permissions/model, cancelled late callbacks, and pointer hit testing on negative monitor coordinates.
 
-The optional `--voice` check verifies that the production spoken-output voice selection generates non-silent audio and completes. It does not record a microphone.
+The default suite also checks Codex voice negotiation, exact text submission, playback completion, cancellation, stale events, disconnects and cleanup after a cancelled session starts late. The optional `--voice` check uses the existing Little Guy sign-in and a temporary window to speak a synthetic sentence through the production WebRTC player. It requires network access and verifies non-silent received audio and completed playback. It does not record a microphone.
 
 The optional `--codex-fixture` command also launches the real installed Codex runtime against a local synthetic HTTP model fixture. It checks completion, isolated account state, image delivery, and actual tool exposure. It uses no cloud model request or real screen capture. A sandbox must permit binding a loopback port and launching Codex for this check.
 
 `scripts/Build-Mac.sh` also verifies the finished bundle's local code signature. Manual desktop acceptance should cover sign-in, a real streamed answer, screenshot permission/selection/cancellation, image interpretation, follow-ups, copy, speech, menu/hotkey reopen, and quit with no surviving owned helper.
+
+### Version 0.4.0 — September 11, 2026
+
+- Connected spoken replies to Codex realtime WebRTC v3 through Little Guy's existing ChatGPT sign-in; no separate API key. Astra Low still generates answers, and Apple on-device speech still transcribes microphone input.
+- The live production voice check reached Speaking, detected non-silent audio, and completed playback. The default regression suite passed, including voice cancellation and stale-event checks. External speaker audibility was not measured with another microphone.
+- Installed bundle 0.4.0 also completed Settings → Preview voice and an Astra Low popup reply reading “Codex voice is connected.” The popup reported Finished speaking · Codex voice. Screen access was refreshed for the rebuilt bundle; test text was cleared and automatic screen context restored afterward.
+- Stop speech, new questions, New, dismissal, window changes, and Quit release the player. Answer text remains available if voice fails.
 
 ### Version 0.3.0 — September 10, 2026
 

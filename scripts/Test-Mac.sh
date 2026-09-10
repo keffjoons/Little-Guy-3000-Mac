@@ -25,6 +25,10 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/VoiceInput.swift src/LittleGuy3000.Mac/QuickCompanion.swift \
     tests/Mac/QuickTests.swift -o .local/mac-quick-tests
 .local/mac-quick-tests
+xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+    src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+    src/LittleGuy3000.Mac/SpeechController.swift tests/Mac/SpeechTests.swift -o .local/mac-speech-tests
+.local/mac-speech-tests
 if [ "${1:-}" = "--codex-fixture" ]; then
     python3 scripts/Verify-Codex.py
 fi
@@ -36,6 +40,8 @@ if [ "${1:-}" = "--live" ]; then
 fi
 if [ "${1:-}" = "--voice" ]; then
     xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
-        src/LittleGuy3000.Mac/SpeechController.swift tests/Mac/SpeechTests.swift -o .local/mac-speech-tests
-    .local/mac-speech-tests
+        src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CompanionSession.swift \
+        src/LittleGuy3000.Mac/CodexVoicePlayer.swift src/LittleGuy3000.Mac/SpeechController.swift \
+        tests/Mac/LiveVoiceTests.swift -o .local/mac-live-voice-tests
+    .local/mac-live-voice-tests
 fi

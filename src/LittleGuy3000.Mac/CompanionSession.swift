@@ -40,7 +40,7 @@ struct ModelChoice: Identifiable {
 }
 
 @MainActor @Observable
-final class CompanionSession {
+final class CompanionSession: CodexVoiceBackend {
     enum Connection: Equatable { case disconnected, connecting, signedOut, signingIn, ready }
     private(set) var connection: Connection = .disconnected
     private(set) var messages: [ConversationMessage] = []
@@ -63,6 +63,7 @@ final class CompanionSession {
     var followPointer: Bool { didSet { defaults.set(followPointer, forKey: "followPointer") } }
     var reducedMotion: Bool { didSet { defaults.set(reducedMotion, forKey: "reducedMotion") } }
     @ObservationIgnored var completedAnswer: ((String) -> Void)?
+    @ObservationIgnored var voiceNotification: ((String, [String: Any]) -> Void)?
     @ObservationIgnored private let transport: CodexTransport
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var threadID: String?
@@ -84,6 +85,7 @@ final class CompanionSession {
         transport.notification = { [weak self] method, body in self?.receive(method, body) }
         transport.disconnected = { [weak self] in
             guard let self else { return }
+            self.voiceNotification?("connection/closed", [:])
             self.operation = UUID(); self.connection = .disconnected; self.threadID = nil
             self.finishFailure("Connection lost. Reconnect to continue.")
         }
@@ -106,6 +108,7 @@ final class CompanionSession {
 
     func connect(executable: String, home: URL, configuration: String) async {
         guard !busy, connection != .connecting else { return }
+        voiceNotification?("connection/closed", [:])
         settings = (executable, home, configuration)
         let token = UUID(); operation = token
         connection = .connecting; error = nil; threadID = nil
@@ -255,6 +258,7 @@ final class CompanionSession {
     }
 
     private func receive(_ method: String, _ body: [String: Any]) {
+        if method.hasPrefix("thread/realtime/") { voiceNotification?(method, body); return }
         if method == "account/login/completed", body["success"] as? Bool == false {
             loginTimeout?.cancel(); connection = .signedOut; error = "Sign-in didn’t complete. Please try again."; return
         }
@@ -300,8 +304,14 @@ final class CompanionSession {
     }
 
     func shutdown() {
+        voiceNotification?("connection/closed", [:])
         operation = UUID(); timeout?.cancel(); loginTimeout?.cancel(); transport.stop()
         busy = false; connection = .disconnected
+    }
+
+    func voiceRequest(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
+        guard connection == .ready else { throw CompanionError.message("Connect Little Guy before using Codex voice.") }
+        return try await transport.request(method, params)
     }
 
     private static let instructions = """
