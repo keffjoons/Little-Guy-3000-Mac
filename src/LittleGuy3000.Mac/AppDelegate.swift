@@ -30,7 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow(); buildCompanion(); buildBubble(); buildMenu(); registerHotKey()
         quick.stopSpeech = { [weak self] in self?.stopSpeech() }
-        quick.beginLiveVoice = { [weak self] in self?.startLiveVoice() }
+        quick.beginLiveVoice = { [weak self] in
+            guard let self else { return }
+            self.startLiveVoice(); self.live.setShortcutHeld(true)
+        }
+        quick.endLiveInput = { [weak self] in self?.live.setShortcutHeld(false) }
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification] {
             sleepObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.live.stop(); self?.quick.cancel(); self?.speech.stop() }
@@ -268,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     private func authorizeVoice() {
         Task {
-            if await AVCaptureDevice.requestAccess(for: .audio) { session.notice = "Microphone enabled. Start Live voice in the popup to talk." }
+            if await AVCaptureDevice.requestAccess(for: .audio) { session.notice = "Microphone enabled. Hold Control–Option–Space to talk; release to mute." }
             else { session.error = "Allow Little Guy in System Settings → Privacy & Security → Microphone." }
         }
     }
@@ -279,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
               let url = Bundle.main.url(forResource: "guide-config", withExtension: "toml"),
               let configuration = try? String(contentsOf: url, encoding: .utf8),
               let host = bubble.contentView else { session.error = "The voice runtime is unavailable. Reconnect in Settings."; return }
-        quick.cancel(); speech.stop(); session.error = nil; session.notice = nil
+        speech.stop(); session.error = nil; session.notice = nil
         let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
         live.start(in: host, executable: executable, home: home, configuration: configuration,
                    target: quick.target, screenEnabled: quick.screenEnabled)

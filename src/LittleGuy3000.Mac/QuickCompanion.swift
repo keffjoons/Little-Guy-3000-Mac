@@ -19,6 +19,7 @@ final class QuickCompanion {
     @ObservationIgnored private var pressed = false
     @ObservationIgnored var stopSpeech: (() -> Void)?
     @ObservationIgnored var beginLiveVoice: (() -> Void)?
+    @ObservationIgnored var endLiveInput: (() -> Void)?
 
     init(session: CompanionSession, voice: VoiceTranscribing, defaults: UserDefaults = .standard,
          capture: @escaping (PointerTarget) async throws -> Data) {
@@ -70,6 +71,7 @@ final class QuickCompanion {
 
     func keyUp() {
         pressed = false; hold?.cancel(); hold = nil
+        endLiveInput?()
         if phase == .preparing { cancel(); session.notice = "Microphone setup finished? Hold the shortcut again to speak." }
         else if phase == .listening { finishVoice() }
     }
@@ -142,6 +144,7 @@ final class QuickCompanion {
 
     func cancel() {
         generation = UUID(); pressed = false
+        endLiveInput?()
         hold?.cancel(); work?.cancel(); deadline?.cancel(); voice.cancel()
         if phase == .capturing { session.isCapturing = false }
         phase = .idle

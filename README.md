@@ -6,7 +6,7 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version **0.5.0**) opens beside your cursor. **Start Live voice, or hold Control–Option–Space to start a call.** Talk naturally and interrupt spoken replies without starting a new connection. Codex realtime voice handles the conversation; **GPT-6 Astra with Low reasoning** handles screen questions and window controls. With screen context on, it inspects the selected window when needed. Requested Spotify Play/Pause can run directly; other accessible controls and text entry show an approval in the popup.
+A native SwiftUI and AppKit Mac companion (version **0.5.1**) opens beside your cursor. **Hold Control–Option–Space to talk; release it to mute.** The connection stays ready between requests, and replies play while the microphone is muted. Hold the shortcut again to interrupt. Codex realtime voice handles the conversation; **GPT-6 Astra with Low reasoning** handles screen questions and window controls. With screen context on, it inspects the selected window when needed. Requested window actions run directly, without an Allow action popup.
 
 On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 
@@ -15,7 +15,7 @@ On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 open "artifacts/Little Guy 3000.app"
 ```
 
-First-time setup needs ChatGPT sign-in and macOS Microphone, Screen Recording, and Accessibility permissions. **Live microphone audio is sent through your ChatGPT connection.** Mute, End voice, Escape, dismissal, sleep, or Quit stops transmission. Typed questions and manual image attachments remain available. See [the Mac guide](docs/MACOS.md) for tested behavior and supported controls.
+First-time setup needs ChatGPT sign-in and macOS Microphone, Screen Recording, and Accessibility permissions. **Microphone audio is sent through your ChatGPT connection only while you hold the shortcut.** Releasing, End voice, Escape, dismissal, sleep, or Quit stops transmission. Typed questions and manual image attachments remain available. See [the Mac guide](docs/MACOS.md) for tested behavior and supported controls.
 
 ## Windows preview
 

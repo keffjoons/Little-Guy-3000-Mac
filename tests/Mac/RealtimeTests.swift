@@ -40,10 +40,12 @@ import AppKit
         let params = backend.calls.first { $0.0 == "thread/realtime/start" }!.1
         precondition(params["clientManagedHandoffs"] as? Bool == false && params["version"] as? String == "v3")
         player.event?(["ready": true]); precondition(live.connected)
-        live.toggleMute(); precondition(live.muted && player.muted)
+        precondition(live.muted, "Connecting must never open the microphone")
+        live.setShortcutHeld(true); precondition(!live.muted && !player.muted)
+        live.setShortcutHeld(false); precondition(live.muted && player.muted)
         player.muted = false
         player.event?(["microphone": true]); precondition(player.muted, "Mute must survive delayed microphone authorization")
-        live.toggleMute(); precondition(!live.muted && !player.muted)
+        live.setShortcutHeld(true); precondition(!live.muted && !player.muted)
         backend.emit("thread/realtime/sdp", ["threadId": "wrong", "sdp": "wrong"])
         precondition(player.sdp.isEmpty)
         backend.emit("thread/realtime/sdp", ["threadId": "live", "sdp": "answer"])
@@ -60,11 +62,8 @@ import AppKit
         precondition(wrong["success"] as? Bool == false)
         let noScreen = await backend.toolCall!(["threadId": "live", "tool": "inspect_window", "arguments": [:]])
         precondition(noScreen["success"] as? Bool == false)
-        let pending = Task { await live.actions.confirm!("Press test button") }
-        await settle(); precondition(live.approval != nil)
         let staleCallback = player.event
         live.stop(); precondition(!live.active && !live.connected && backend.stops > 0)
-        let approved = await pending.value; precondition(!approved)
         staleCallback?(["ready": true]); precondition(!live.connected)
         precondition(WindowActions.isRequestedPlayback(bundleID: "com.spotify.client", label: "Play Test Playlist", intent: "play this playlist"))
         precondition(!WindowActions.isRequestedPlayback(bundleID: "com.spotify.client", label: "Play", intent: "don't play this"))
@@ -72,9 +71,17 @@ import AppKit
         precondition(!WindowActions.isRequestedPlayback(bundleID: "com.spotify.client", label: "Delete", intent: "play this"))
         precondition(WindowActions.playbackChanged(before: "Play", after: "Pause"))
         precondition(!WindowActions.playbackChanged(before: "Play", after: "Play"))
+        precondition(WindowActions.spotifyURI("https://xpui.app.spotify.com/playlist/37i9dQZF1E39P9bu7Fxig1") == URL(string: "spotify:playlist:37i9dQZF1E39P9bu7Fxig1"))
+        precondition(WindowActions.spotifyURI("https://evil.example/playlist/37i9dQZF1E39P9bu7Fxig1") == nil)
+        precondition(WindowActions.spotifyURI("https://open.spotify.com/playlist/../../anything") == nil)
+        live.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: nil, screenEnabled: false, syntheticInput: true)
+        live.setShortcutHeld(true); live.setShortcutHeld(false)
+        await settle(); player.muted = false; player.event?(["microphone": true]); player.event?(["ready": true])
+        precondition(live.muted && player.muted, "Release during connection must survive late microphone startup")
+        live.stop()
         let page = CodexVoicePlayer.page(conversation: true)
         precondition(page.contains("getUserMedia") && page.contains("echoCancellation:true") && page.contains("track.stop()"))
         precondition(!CodexVoicePlayer.html.contains("getUserMedia"))
-        print("PASS: persistent realtime session, mute, transcript completion without teardown, stale sessions, scope gating, cancelled approvals and playback receipt policy")
+        print("PASS: persistent realtime session, mute, transcript completion without teardown, stale sessions, scope gating, shortcut-only microphone input and playback receipt policy")
     }
 }

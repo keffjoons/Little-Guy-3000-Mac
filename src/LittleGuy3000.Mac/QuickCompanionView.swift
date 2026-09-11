@@ -29,7 +29,7 @@ struct QuickCompanionView: View {
             }.buttonStyle(.plain)
             if live.active || !live.heardText.isEmpty || !live.replyText.isEmpty {
                 if !live.heardText.isEmpty { Text(live.heardText).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
-                ScrollView { Text(live.replyText.isEmpty ? "I'm listening…" : live.replyText).font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 140)
+                ScrollView { Text(live.replyText.isEmpty ? (live.muted ? "Hold ⌃⌥Space to talk" : "I'm listening…") : live.replyText).font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 140)
                 if !live.active { Button("New conversation") { live.clear(); session.newConversation() }.font(.caption) }
             } else if let answer = session.messages.last(where: { $0.role == .assistant }) {
                 ScrollView {
@@ -44,7 +44,7 @@ struct QuickCompanionView: View {
                 }.font(.caption).buttonStyle(.plain).foregroundStyle(.secondary)
             } else {
                 Text("What do you need a hand with?").font(.system(size: 16, weight: .medium))
-                Text("Point at a window and start Live voice. Speak naturally, and interrupt anytime. Hold ⌃⌥Space to start.")
+                Text("Point at a window. Hold ⌃⌥Space to talk, then release to mute. Replies play automatically.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
             if session.connection != .ready {
@@ -53,12 +53,6 @@ struct QuickCompanionView: View {
             if let error = session.error { Text(error).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
             if let notice = session.notice { Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             if let error = live.error { Text(error).font(.caption).foregroundStyle(.orange) }
-            if let approval = live.approval {
-                VStack(alignment: .leading) {
-                    Text(approval).font(.caption)
-                    HStack { Button("Allow action") { live.resolveApproval(true) }; Button("Cancel action") { live.resolveApproval(false) } }
-                }.padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-            }
             HStack(alignment: .bottom, spacing: 8) {
                 TextField("Or type a question…", text: $session.draft, axis: .vertical)
                     .lineLimit(1...3).textFieldStyle(.plain).onSubmit { send() }
@@ -70,19 +64,18 @@ struct QuickCompanionView: View {
             }.padding(11).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
             HStack {
                 if live.active {
-                    Button(live.muted ? "Unmute" : "Mute") { live.toggleMute() }
                     Button("End voice") { live.stop() }
                 } else if quick.active || session.busy {
                     if quick.phase == .listening { Button("Done") { quick.finishVoice() } }
                     Button("Stop", action: stop)
                 } else {
-                    Button(action: startLive) { Label("Live voice", systemImage: "waveform") }
+                    Button(action: startLive) { Label("Connect voice", systemImage: "waveform") }
                         .disabled(session.connection != .ready)
                 }
-                Text(live.active ? live.status : "Hold ⌃⌥Space to start voice").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(live.active ? live.status : "Hold ⌃⌥Space to talk").font(.system(size: 10)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }.controlSize(.small)
-            if !live.active { Text("Live voice sends microphone audio through your ChatGPT connection.").font(.system(size: 10)).foregroundStyle(.secondary) }
+            if !live.active { Text("Microphone audio is sent only while you hold ⌃⌥Space.").font(.system(size: 10)).foregroundStyle(.secondary) }
             HStack {
                 Toggle(isOn: $quick.screenEnabled) { Image(systemName: "macwindow") }
                     .toggleStyle(.switch).controlSize(.mini).help("Include a fresh image of the pointed window")

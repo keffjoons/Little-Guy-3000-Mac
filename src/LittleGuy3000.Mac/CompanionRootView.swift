@@ -332,14 +332,14 @@ private struct CompanionSettings: View {
                     Toggle("Read answers aloud", isOn: $session.speakAnswers).onChange(of: session.speakAnswers) { _, enabled in if !enabled { stopSpeech() } }
                     HStack { Button("Preview voice", action: previewSpeech); Button("Stop speech", action: stopSpeech) }
                     if !speech.status.isEmpty { Text(speech.status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("speechStatus") }
-                    Text("Start Live voice in the popup for an ongoing conversation. Microphone audio is sent through your ChatGPT connection until you mute or end the call. Read answers aloud controls narration of typed answers.")
+                    Text("Hold Control–Option–Space to talk; release it to mute. The voice connection stays ready between requests. Connect voice opens the connection with the microphone muted. Read answers aloud controls narration of typed answers.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Your privacy") {
                     Toggle("Capture the pointed window for quick questions", isOn: $quick.screenEnabled)
                     Button("Enable Screen Recording…", action: enableScreen)
                     Button("Enable window controls…") { WindowActions.requestAccess() }
-                    Text("Live voice can ask Astra to inspect and operate the selected window. Screen context must be on. Requested Spotify playback can run directly; other control actions show an approval in the popup. Screenshots and live microphone audio go through your ChatGPT connection. End voice stops the microphone and pending actions.")
+                    Text("Live voice can ask Astra to inspect and operate the selected window. Screen context must be on. Requested actions run directly without an extra approval popup. Screenshots and microphone audio while the shortcut is held go through your ChatGPT connection. End voice stops the microphone and pending actions.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

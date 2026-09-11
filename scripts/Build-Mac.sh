@@ -16,10 +16,10 @@ config = '\n'.join(line.strip() for line in match.group(1).splitlines()) + '\n'
 shutil.copyfile(root/'src/LittleGuy3000.Desktop/Assets/Square150x150Logo.scale-200.png', app/'Contents/Resources/LittleGuy.png')
 info = dict(CFBundleExecutable='LittleGuy3000', CFBundleIdentifier='com.littleguy3000.mac',
             CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000', CFBundleIconFile='LittleGuy.png',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.5.0', CFBundleVersion='6',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.5.1', CFBundleVersion='7',
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSScreenCaptureUsageDescription='See the window under your pointer when you ask Little Guy a question.',
-            NSMicrophoneUsageDescription='Stream your microphone to Codex during Live voice. Mute or End voice stops microphone transmission.',
+            NSMicrophoneUsageDescription='Stream your microphone to Codex only while you hold the talk shortcut. Release it to mute.',
             NSSpeechRecognitionUsageDescription='Turn your spoken question into text using on-device speech recognition.')
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(info, f)
 PY
@@ -27,6 +27,6 @@ xcrun swiftc -swift-version 5 -O -target "$(uname -m)-apple-macosx14.0" \
     -module-cache-path "$ROOT/.local/swift-cache" \
     -framework AppKit -framework Carbon \
     src/LittleGuy3000.Mac/*.swift -o "$APP/Contents/MacOS/LittleGuy3000"
-codesign --force --sign - --identifier com.littleguy3000.mac "$APP"
+python3 scripts/Sign-Mac.py "$APP"
 codesign --verify --strict "$APP"
 printf 'Built: %s\n' "$APP"

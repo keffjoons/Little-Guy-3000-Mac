@@ -96,6 +96,16 @@ import AppKit
         precondition(!quick.active, "Releasing during permissions must not start late recording")
         voice.completed?(.success("Stale words"))
         precondition(session.draft.isEmpty && backend.turns.count == 3)
+        var holds = 0, releases = 0
+        quick.beginLiveVoice = { holds += 1 }
+        quick.endLiveInput = { releases += 1 }
+        quick.keyDown(); quick.keyDown()
+        try await Task.sleep(for: .milliseconds(350))
+        precondition(holds == 1, "Repeat keydown must not restart a call")
+        quick.keyUp(); precondition(releases == 1, "Releasing must mute live input")
+        quick.keyDown(); quick.keyUp()
+        try await Task.sleep(for: .milliseconds(350))
+        precondition(holds == 1, "A released short tap must not start late input")
         backend.available = false; await session.reconnect()
         session.draft = "Missing Astra"; quick.send()
         precondition(backend.turns.count == 3 && session.error?.contains("Astra") == true)
