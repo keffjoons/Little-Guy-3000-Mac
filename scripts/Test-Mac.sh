@@ -57,6 +57,11 @@ if [ "${1:-}" = "--realtime" ]; then
         src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
         tests/Mac/RealtimeHandoffTests.swift -o .local/mac-realtime-handoff-tests
     .local/mac-realtime-handoff-tests
+    /usr/bin/say -v Samantha -o .local/live-playlist.aiff 'How do I make a new playlist?'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/live-playlist.aiff .local/live-playlist.wav
+    /usr/bin/say -v Samantha -o .local/live-window-change.aiff 'What background colour and heading am I looking at now?'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/live-window-change.aiff .local/live-window-change.wav
+    .local/mac-realtime-handoff-tests --playlist
 fi
 if [ "${1:-}" = "--codex-fixture" ]; then
     python3 scripts/Verify-Codex.py

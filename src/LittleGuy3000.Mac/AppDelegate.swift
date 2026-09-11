@@ -171,8 +171,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Cocoa uses a bottom-left origin; capture APIs use the primary display's top-left.
         let capturePoint = CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - point.y)
         let overBubble = bubble.isVisible && bubble.frame.contains(point)
-        if !overBubble { quick.point(at: PointerCapture.target(at: capturePoint)); anchor = point }
-        else if anchor == .zero { anchor = point }
+        // Capture ignores our own windows, including the click-through mascot.
+        // Always refresh the underlying target even when the pointer is over it.
+        quick.point(at: PointerCapture.target(at: capturePoint))
+        if !overBubble || anchor == .zero { anchor = point }
         session.setCompact(true); session.settingsVisible = false
         quick.screenPermitted = PointerCapture.permitted
         live.setContext(target: quick.target, enabled: quick.screenEnabled)

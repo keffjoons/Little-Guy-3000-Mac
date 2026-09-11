@@ -1,5 +1,6 @@
 import AppKit
 import ScreenCaptureKit
+import Vision
 
 struct PointerTarget: Equatable {
     let id: CGWindowID
@@ -53,5 +54,22 @@ enum PointerCapture {
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
         try Task.checkCancellation()
         return try ImageAttachment.png(image)
+    }
+
+    static func readContext(_ target: PointerTarget) async throws -> (image: Data, text: String) {
+        let image = try await capture(target)
+        return (image, (try? await recognizeText(image)) ?? "")
+    }
+
+    // OCR gives live voice immediate visible context. Visual questions and actions
+    // still use inspect_window's full screenshot and accessibility controls.
+    nonisolated static func recognizeText(_ image: Data) async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            try VNImageRequestHandler(data: image).perform([request])
+            let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            return String(lines.joined(separator: "\n").prefix(12_000))
+        }.value
     }
 }

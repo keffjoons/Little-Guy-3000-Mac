@@ -33,12 +33,13 @@ import AppKit
     @MainActor static func settle() async { for _ in 0..<30 { await Task.yield() } }
     @MainActor static func main() async {
         let backend = RealtimeBackend(), player = RealtimePlayer(), host = NSView()
-        let live = LiveConversation(transport: backend, player: player)
+        let live = LiveConversation(transport: backend, player: player, readScreen: { target in (Data([1]), "Visible heading in \(target.name): Test library") })
         live.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: nil, screenEnabled: false, syntheticInput: true)
         await settle(); precondition(live.active && player.prepares == 1)
         player.event?(["sdp": "offer"]); await settle()
         let params = backend.calls.first { $0.0 == "thread/realtime/start" }!.1
         precondition(params["clientManagedHandoffs"] as? Bool == false && params["version"] as? String == "v3")
+        precondition((params["initialItems"] as? [[String: String]])?.first?["text"]?.contains("Screen context is OFF") == true)
         player.event?(["ready": true]); precondition(live.connected)
         precondition(live.muted, "Connecting must never open the microphone")
         live.setShortcutHeld(true); precondition(!live.muted && !player.muted)
@@ -58,11 +59,29 @@ import AppKit
         live.send("second request"); await settle()
         precondition(backend.calls.filter { $0.0 == "thread/start" }.count == 1)
         precondition(backend.calls.filter { $0.0 == "thread/realtime/start" }.count == 1)
-        precondition(backend.calls.filter { $0.0 == "thread/realtime/appendText" }.count == 2)
+        precondition(backend.calls.filter { $0.0 == "thread/realtime/appendText" && $0.1["role"] as? String == "user" }.count == 2)
         let wrong = await backend.toolCall!(["threadId": "stale", "tool": "press_control", "arguments": ["control": "x"]])
         precondition(wrong["success"] as? Bool == false)
         let noScreen = await backend.toolCall!(["threadId": "live", "tool": "inspect_window", "arguments": [:]])
         precondition(noScreen["success"] as? Bool == false)
+        let spotify = PointerTarget(id: 42, pid: 9, name: "Spotify")
+        live.setContext(target: spotify, enabled: true); await settle()
+        let context = backend.calls.last!.1
+        precondition(context["role"] as? String == "developer" && (context["text"] as? String)?.contains("Spotify") == true)
+        live.send("How do I make a new playlist?"); await settle()
+        let requestIndex = backend.calls.lastIndex { $0.1["text"] as? String == "How do I make a new playlist?" }!
+        precondition(backend.calls[requestIndex - 1].1["role"] as? String == "developer", "Current context precedes the question")
+        let snapshot = backend.calls[..<requestIndex].last { $0.0 == "thread/inject_items" }!.1
+        let items = snapshot["items"] as! [[String: Any]]
+        let content = items[0]["content"] as! [[String: Any]]
+        precondition(content.contains { $0["type"] as? String == "input_image" }, "Automatically deliver the full screenshot before the question")
+        precondition((backend.calls[requestIndex - 1].1["text"] as? String)?.contains("Test library") == true, "Voice receives visible content too")
+        live.setContext(target: nil, enabled: true); await settle()
+        precondition((backend.calls.last!.1["text"] as? String)?.contains("no window was selected") == true)
+        let cleared = backend.calls.last { $0.0 == "thread/inject_items" }!.1["items"] as! [[String: Any]]
+        precondition((cleared[0]["content"] as! [[String: Any]]).count == 1, "Missing window must not resend an old screenshot")
+        live.setContext(target: spotify, enabled: false); await settle()
+        precondition((backend.calls.last!.1["text"] as? String)?.contains("Screen context is OFF") == true)
         backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "user", "text": "Previous question"])
         backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "assistant", "text": "Previous answer"])
         live.setShortcutHeld(false); live.setShortcutHeld(true)
@@ -84,6 +103,28 @@ import AppKit
         await settle(); player.muted = false; player.event?(["microphone": true]); player.event?(["ready": true])
         precondition(live.muted && player.muted, "Release during connection must survive late microphone startup")
         live.stop()
+        live.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: spotify, screenEnabled: true, syntheticInput: true)
+        await settle(); player.event?(["sdp": "offer"]); await settle()
+        let initial = backend.calls.last { $0.0 == "thread/realtime/start" }!.1["initialItems"] as! [[String: String]]
+        precondition(initial.first!["text"]!.contains("Spotify"), "The first voice turn knows the selected app")
+        live.setContext(target: PointerTarget(id: 43, pid: 10, name: "Notes"), enabled: true)
+        player.event?(["ready": true]); await settle()
+        precondition((backend.calls.last!.1["text"] as? String)?.contains("Notes") == true, "A window change during connection replaces startup context")
+        live.stop()
+        let delayedBackend = RealtimeBackend(), delayedPlayer = RealtimePlayer()
+        var pendingCapture: CheckedContinuation<(image: Data, text: String), Error>?
+        let delayed = LiveConversation(transport: delayedBackend, player: delayedPlayer, readScreen: { _ in
+            try await withCheckedThrowingContinuation { pendingCapture = $0 }
+        })
+        delayed.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: spotify, screenEnabled: true, syntheticInput: true)
+        await settle(); delayedPlayer.event?(["ready": true]); delayed.setShortcutHeld(true); await settle()
+        precondition(pendingCapture != nil)
+        delayed.setContext(target: nil, enabled: false); await settle()
+        pendingCapture?.resume(returning: (Data([1]), "STALE SPOTIFY CONTENT")); await settle()
+        let updates = delayedBackend.calls.filter { $0.0 == "thread/inject_items" }
+        precondition(!updates.contains { String(describing: $0.1).contains("input_image") }, "Late captures cannot upload after screen context is disabled")
+        precondition(!delayedBackend.calls.contains { String(describing: $0.1).contains("STALE SPOTIFY CONTENT") })
+        delayed.stop()
         let page = CodexVoicePlayer.page(conversation: true)
         precondition(page.contains("getUserMedia") && page.contains("echoCancellation:true") && page.contains("track.stop()"))
         precondition(!CodexVoicePlayer.html.contains("getUserMedia"))
