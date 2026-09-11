@@ -328,17 +328,18 @@ private struct CompanionSettings: View {
                     LabeledContent("Show Little Guy", value: session.shortcutAvailable ? "Control–Option–Space" : "Shortcut unavailable; use the menu bar")
                 }
                 Section("Voice") {
-                    Button("Enable microphone and local speech…", action: enableVoice)
+                    Button("Enable microphone…", action: enableVoice)
                     Toggle("Read answers aloud", isOn: $session.speakAnswers).onChange(of: session.speakAnswers) { _, enabled in if !enabled { stopSpeech() } }
                     HStack { Button("Preview voice", action: previewSpeech); Button("Stop speech", action: stopSpeech) }
                     if !speech.status.isEmpty { Text(speech.status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("speechStatus") }
-                    Text("Hold Control–Option–Space to talk; release to ask. Your speech is transcribed on this Mac. Answers are read aloud by Codex voice through your ChatGPT connection.")
+                    Text("Start Live voice in the popup for an ongoing conversation. Microphone audio is sent through your ChatGPT connection until you mute or end the call. Read answers aloud controls narration of typed answers.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Your privacy") {
                     Toggle("Capture the pointed window for quick questions", isOn: $quick.screenEnabled)
                     Button("Enable Screen Recording…", action: enableScreen)
-                    Text("Quick questions use Astra with Low reasoning. Sending a question or releasing push-to-talk sends your words and a fresh image of the pointed window when screen context is on. Microphone audio stays on this Mac. Conversations stay in memory until you start a new one or quit.")
+                    Button("Enable window controls…") { WindowActions.requestAccess() }
+                    Text("Live voice can ask Astra to inspect and operate the selected window. Screen context must be on. Requested Spotify playback can run directly; other control actions show an approval in the popup. Screenshots and live microphone audio go through your ChatGPT connection. End voice stops the microphone and pending actions.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

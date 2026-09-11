@@ -32,6 +32,15 @@ struct ProtocolTests {
         precondition(approval["declined"] as? Bool == true)
         let tool = try await client.request("test/tool")
         precondition(tool["rejected"] as? Bool == true)
+        client.toolCall = { params in
+            precondition(params["threadId"] as? String == "live" && params["tool"] as? String == "inspect_window")
+            return ["success": true, "contentItems": [["type": "inputText", "text": "synthetic window"]]]
+        }
+        let action = try await client.request("test/action")
+        precondition(action["success"] as? Bool == true)
+        let stillDenied = try await client.request("test/approval")
+        precondition(stillDenied["declined"] as? Bool == true)
+        client.toolCall = nil
         do { _ = try await client.request("test/error"); fatalError("Expected protocol failure") }
         catch { precondition(error.localizedDescription.contains("-42")) }
         let delayed = Task { try await client.request("test/hang") }

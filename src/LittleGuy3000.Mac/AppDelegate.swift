@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Carbon
 import SwiftUI
 
@@ -23,13 +24,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hidden = false
     private var terminating = false
     private lazy var speech = SpeechController(backend: session)
+    private let live = LiveConversation()
+    private var sleepObservers: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow(); buildCompanion(); buildBubble(); buildMenu(); registerHotKey()
         quick.stopSpeech = { [weak self] in self?.stopSpeech() }
+        quick.beginLiveVoice = { [weak self] in self?.startLiveVoice() }
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification] {
+            sleepObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.live.stop(); self?.quick.cancel(); self?.speech.stop() }
+            })
+        }
         session.completedAnswer = { [weak self] answer in
             guard let self else { return }
-            if self.session.speakAnswers { self.speak(answer) }
+            if self.session.speakAnswers && !self.live.active { self.speak(answer) }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             let handled = MainActor.assumeIsolated {
@@ -139,7 +148,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         bubble.isOpaque = false; bubble.backgroundColor = .clear; bubble.hasShadow = true
         bubble.level = .floating; bubble.hidesOnDeactivate = false
         bubble.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        bubbleHost = NSHostingView(rootView: QuickCompanionView(quick: quick, speech: speech,
+        bubbleHost = NSHostingView(rootView: QuickCompanionView(quick: quick, speech: speech, live: live,
+            startLive: { [weak self] in self?.startLiveVoice() },
             settings: { [weak self] in self?.showSettings() }, details: { [weak self] in self?.showPanel() },
             dismiss: { [weak self] in self?.hideAll() }, enableScreen: { PointerCapture.requestAccess() },
             stop: { [weak self] in self?.cancelInteraction() }))
@@ -156,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else if anchor == .zero { anchor = point }
         session.setCompact(true); session.settingsVisible = false
         quick.screenPermitted = PointerCapture.permitted
+        live.setContext(target: quick.target, enabled: quick.screenEnabled)
         if window.isVisible { stopSpeech() }
         hidden = false; window.orderOut(nil)
         positionBubble(); bubble.makeKeyAndOrderFront(nil)
@@ -201,6 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func capture() {
         guard !session.busy, !session.isCapturing else { return }
+        live.stop()
         stopSpeech()
         session.isCapturing = true; session.error = nil; session.notice = nil
         quick.cancel(); bubble.orderOut(nil); companion.orderOut(nil); window.orderOut(nil)
@@ -249,19 +261,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func speak(_ text: String) {
+        guard !live.active else { return }
         guard let host = bubble.isVisible ? bubble.contentView : window.contentView,
               host.window?.isVisible == true else { return }
         speech.speak(text, in: host)
     }
     private func authorizeVoice() {
         Task {
-            if await VoiceInput.authorize() { session.notice = "Voice access is enabled. Hold Control–Option–Space to speak." }
-            else { session.error = "Allow Little Guy in System Settings → Privacy & Security → Microphone and Speech Recognition." }
+            if await AVCaptureDevice.requestAccess(for: .audio) { session.notice = "Microphone enabled. Start Live voice in the popup to talk." }
+            else { session.error = "Allow Little Guy in System Settings → Privacy & Security → Microphone." }
         }
     }
     private func stopSpeech() { speech.stop() }
+    private func startLiveVoice() {
+        guard !live.active, !session.busy, session.connection == .ready else { return }
+        guard let executable = CodexConnection.executable(),
+              let url = Bundle.main.url(forResource: "guide-config", withExtension: "toml"),
+              let configuration = try? String(contentsOf: url, encoding: .utf8),
+              let host = bubble.contentView else { session.error = "The voice runtime is unavailable. Reconnect in Settings."; return }
+        quick.cancel(); speech.stop(); session.error = nil; session.notice = nil
+        let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
+        live.start(in: host, executable: executable, home: home, configuration: configuration,
+                   target: quick.target, screenEnabled: quick.screenEnabled)
+    }
     private func cancelInteraction() {
         stopSpeech()
+        if live.active { live.stop(); return }
         if quick.active { quick.cancel(); return }
         if session.isCapturing { picker?.cancel() }
         else if session.busy { Task { await session.cancel() } }
@@ -270,12 +295,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func showPanel() {
         guard !terminating else { return }
+        live.stop()
         stopSpeech()
         quick.cancel(); bubble.orderOut(nil)
         hidden = false; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func showSettings() { showPanel(); session.settingsVisible = true }
     @objc private func hideAll() {
+        live.stop()
         quick.cancel(); bubble.orderOut(nil)
         if session.isCapturing { picker?.cancel() }
         if session.busy { Task { await session.cancel() } }
@@ -285,8 +312,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func windowShouldClose(_ sender: NSWindow) -> Bool { stopSpeech(); sender.orderOut(nil); return false }
     func applicationWillTerminate(_ notification: Notification) {
-        terminating = true; quick.cancel(); companionTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
+        terminating = true; live.stop(); quick.cancel(); companionTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        for observer in sleepObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         if let hotKey { UnregisterEventHotKey(hotKey) }; if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
     }
 }

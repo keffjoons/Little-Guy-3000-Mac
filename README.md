@@ -6,7 +6,7 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version **0.4.0**) opens as a small bubble beside your cursor. **Tap Control–Option–Space to type, or hold it to speak and release to ask.** With screen context enabled, it automatically attaches a fresh image of the window under your pointer. Quick answers use **GPT-6 Astra with Low reasoning** and are read aloud through **Codex voice** using your ChatGPT sign-in. Microphone transcription stays on-device.
+A native SwiftUI and AppKit Mac companion (version **0.5.0**) opens beside your cursor. **Start Live voice, or hold Control–Option–Space to start a call.** Talk naturally and interrupt spoken replies without starting a new connection. Codex realtime voice handles the conversation; **GPT-6 Astra with Low reasoning** handles screen questions and window controls. With screen context on, it inspects the selected window when needed. Requested Spotify Play/Pause can run directly; other accessible controls and text entry show an approval in the popup.
 
 On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 
@@ -15,7 +15,7 @@ On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 open "artifacts/Little Guy 3000.app"
 ```
 
-First-time setup needs ChatGPT sign-in plus macOS Microphone, Speech Recognition, and Screen Recording permissions. Voice transcription runs on-device; the app explains when local speech support is unavailable. The Talk/Done buttons also work without holding a key. Settings and Full answer open the larger window. See [the Mac guide](docs/MACOS.md) for setup, tested behavior, and remaining device acceptance checks.
+First-time setup needs ChatGPT sign-in and macOS Microphone, Screen Recording, and Accessibility permissions. **Live microphone audio is sent through your ChatGPT connection.** Mute, End voice, Escape, dismissal, sleep, or Quit stops transmission. Typed questions and manual image attachments remain available. See [the Mac guide](docs/MACOS.md) for tested behavior and supported controls.
 
 ## Windows preview
 

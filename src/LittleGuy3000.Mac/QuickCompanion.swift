@@ -18,6 +18,7 @@ final class QuickCompanion {
     @ObservationIgnored private var deadline: Task<Void, Never>?
     @ObservationIgnored private var pressed = false
     @ObservationIgnored var stopSpeech: (() -> Void)?
+    @ObservationIgnored var beginLiveVoice: (() -> Void)?
 
     init(session: CompanionSession, voice: VoiceTranscribing, defaults: UserDefaults = .standard,
          capture: @escaping (PointerTarget) async throws -> Data) {
@@ -62,7 +63,8 @@ final class QuickCompanion {
         pressed = true
         hold = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-            guard let self, self.pressed else { return }; self.startVoice()
+            guard let self, self.pressed else { return }
+            if let begin = self.beginLiveVoice { begin() } else { self.startVoice() }
         }
     }
 

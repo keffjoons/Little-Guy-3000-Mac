@@ -1,6 +1,6 @@
 # Little Guy 3000 for Mac
 
-This is a native SwiftUI and AppKit port of the companion's question-and-screen workflow. It runs directly on macOS without Windows, .NET, Wine, or Electron. Voice input uses Apple’s on-device speech recognition; the Mac needs speech resources for its current language. It builds for the current Mac's architecture; the verified build is Apple Silicon on macOS 26.2. The deployment target is macOS 14; Intel and older supported macOS versions still need hardware testing.
+This is a native SwiftUI and AppKit port of the companion's question-and-screen workflow. It runs directly on macOS without Windows, .NET, Wine, or Electron. Live voice uses a persistent Codex realtime WebRTC session with microphone input, streamed audio output and interruption. It builds for the current Mac's architecture; the verified build is Apple Silicon on macOS 26.2. The deployment target is macOS 14; Intel and older supported macOS versions still need hardware testing.
 
 ## Build and open
 
@@ -24,12 +24,13 @@ The app resolves npm's native executable and directly owns its helper process. T
 ## Use
 
 1. Open Little Guy. A compact bubble appears near the cursor. If disconnected, open its gear button, sign in, and wait for Connected.
-2. In Settings, enable microphone/local speech and Screen Recording. macOS may require authentication and an app restart. These grants let future questions work without a window chooser. If on-device recognition is unavailable, enable Dictation in macOS Keyboard settings to obtain language support; the app never silently uploads microphone audio.
-3. Point at the window you need help with. **Hold Control–Option–Space**, speak, then release. Recording starts after a 300 ms hold; releasing submits the final transcript and a fresh screenshot. Releasing during first-time permission setup cancels the pending recording: finish setup, then hold again. The **Talk** and **Done** buttons provide the same recording flow.
-4. **Tap Control–Option–Space** to type instead. Press Send or Command–Return. The screen switch turns automatic context off for voice/text-only questions. The window's app name appears beside it. Little Guy does not listen continuously.
-5. The answer streams into the bubble and is spoken by Codex voice when Read answers aloud is enabled. Voice output uses the same Little Guy ChatGPT sign-in and needs internet access. Stop/Escape cancels recording, capture, or the answer. Stop voice silences narration. Full answer opens the larger transcript; its sidebar and model menu can start other modes/conversations.
+2. Enable Microphone and Screen Recording in Settings, plus Accessibility through **Enable window controls…**. macOS may require authentication and an app restart. The app does not listen on launch.
+3. Point at the window you need help with. Click **Live voice** or hold **Control–Option–Space** for 300 ms to start the call. Release the shortcut and continue talking naturally; the connection remains open between turns. You can interrupt while Little Guy speaks. Microphone audio goes through your ChatGPT connection.
+4. **Mute** disables microphone transmission; **End voice** or Escape closes the call and cancels pending actions. Dismissal, opening the full window, display/computer sleep, and Quit also end the call.
+5. With screen context on, screen questions and action requests are delegated to Astra Low. It can inspect the selected window and operate exposed accessibility controls. “Play this playlist” in Spotify can press the identified playlist control and inspect the result. One matching Play/Pause action is allowed per explicit request. Other presses and text entry show an exact action for approval in the popup. Unsupported controls report a limitation; there is no arbitrary coordinate-click or shell fallback.
+6. Tap the shortcut to open the bubble without starting voice. Type and Send for the usual question flow. During a live call, typed messages enter that same conversation. Read answers aloud in Settings controls narration of ordinary typed answers.
 
-The pointer selects the topmost ordinary window before Little Guy appears. Follow-ups capture the same selected window afresh; pointing elsewhere and invoking the shortcut selects a new target. If a window closes, permission is missing, or capture fails, the question stays ready to retry and is not silently sent without its requested context. Captures use `SCShareableContent` plus `SCScreenshotManager`, bounded to 2048 pixels, with no audio or cursor. Nothing continuously records the screen.
+The pointer selects the topmost ordinary window before Little Guy appears. Live screen inspections and typed follow-ups capture the same selected window afresh; pointing elsewhere and invoking the shortcut selects a new target. If a window closes, permission is missing, or capture fails, the question stays ready to retry and is not silently sent without its requested context. Captures use `SCShareableContent` plus `SCScreenshotManager`, bounded to 2048 pixels, with no audio or cursor. Nothing continuously records the screen.
 
 The larger window retains **+ → Choose a window…**, local image import, and pasted images. Manual window selection uses the macOS sharing picker and its authorized short stream. These remain useful when sharing a specific image. Explain, Walkthrough, and Draft a reply offer textual guidance and copyable drafts. Click a mode or choose a model to leave compact Astra mode and begin that conversation.
 
@@ -38,10 +39,10 @@ The menu-bar icon and floating character reopen the bubble. Settings controls po
 ## Privacy and boundaries
 
 - Codex runs as an owned stdio child in `~/Library/Application Support/LittleGuy3000/codex`, with an empty working directory and a separate sign-in. It does not read or overwrite `~/.codex/config.toml` or copy the main Codex app's authentication files.
-- The bundle's restrictions are extracted from the existing C# `GuideConfiguration` during the build. The connection disables action tools, uses an empty environment list and capability-root list, requests read-only/never-approve behavior, and refuses server action requests. Synthetic inspection of the actual model request found no exposed tools.
-- Questions and screenshots go to the connected cloud model when you press Send or finish a voice question. Quick mode explicitly requests `gpt-6-astra` and `effort: low`; it reports an error rather than substituting a model if unavailable. The model may retain earlier images as conversation context, even after their thumbnail clears. Use New conversation to start without that context.
+- The bundle's restrictions are extracted from the existing C# `GuideConfiguration` during the build. Ordinary typed sessions expose no tools. A live session starts its own owned helper with the same isolated profile, enables the code-mode dispatcher using process-local overrides, and registers inspect_window, press_control and set_text as client-handled window tools. Built-in shell, file, browser and computer tools remain disabled. Empty environment and capability-root lists and read-only/never-approve behavior remain in force. The live client checks thread identity, selected window, fresh control references and required approval before dispatch.
+- Typed questions and screenshots go to the connected cloud model when you press Send. Live microphone audio streams during the call; screen images are captured only when the backing assistant requests inspection. Quick mode explicitly requests `gpt-6-astra` and `effort: low`; it reports an error rather than substituting a model if unavailable. The model may retain earlier images as conversation context, even after their thumbnail clears. Use New conversation to start without that context.
 - The UI keeps its conversation in memory. It does not implement automatic history storage. Codex uses ephemeral threads and disabled history; its own operational/account state can still exist in the separate profile. A synthetic marker scan found no literal test prompt/image output persisted; this is not a comprehensive storage audit.
-- Spoken replies use the Codex app-server realtime WebRTC v3 transport, verified with runtime 0.154.0 and the existing ChatGPT sign-in. Each reply creates a separate ephemeral speech session containing only the answer text. A nonpersistent WebKit player receives the audio and sends a silent track; it never requests microphone access. Apple on-device transcription remains the input path. This experimental Codex interface can change with runtime updates; a voice failure leaves the written answer available and shows an error.
+- Live voice uses Codex app-server realtime WebRTC v3, verified with runtime 0.154.0 and the existing ChatGPT sign-in. The audio model handles casual dialogue and delegates screen/action requests to the gpt-6-astra backing thread configured with low reasoning. It keeps the connection open after each response. A nonpersistent WebKit player requests only microphone access, with echo cancellation; it stops tracks and closes WebRTC when the call ends. This experimental interface can change with runtime updates; failures are visible and do not silently switch to text-only narration.
 - Window images are captured directly into memory and bounded to 2048 pixels on the longest edge. Quick mode automatically submits the fresh image with your question; manual attachments show a preview before Send. Little Guy does not write temporary screenshots or print captured content in diagnostic logs.
 - This preview does not exclude its windows from screen recordings. Hide Little Guy from its menu when needed.
 
@@ -51,6 +52,7 @@ The menu-bar icon and floating character reopen the bubble. Settings controls po
 ./scripts/Test-Mac.sh
 ./scripts/Test-Mac.sh --codex-fixture
 ./scripts/Test-Mac.sh --voice
+./scripts/Test-Mac.sh --realtime
 ```
 
 The first command also rejects incomplete/invalid capture frames and checks sign-in gating, draft/model preservation, image retry, cancellation, conversation recovery, fast completion, and image sizing/PNG encoding. It compiles and exercises the Swift transport against a deterministic stdio fixture: split JSONL writes, Unicode, response limits, stale turn/thread rejection, denied approvals and tools, protocol errors, pending-request cancellation, and reconnect.
@@ -59,9 +61,20 @@ The default suite also tests tap/hold/release, final-only transcription submissi
 
 The default suite also checks Codex voice negotiation, exact text submission, playback completion, cancellation, stale events, disconnects and cleanup after a cancelled session starts late. The optional `--voice` check uses the existing Little Guy sign-in and a temporary window to speak a synthetic sentence through the production WebRTC player. It requires network access and verifies non-silent received audio and completed playback. It does not record a microphone.
 
+The default suite tests persistent session lifetime, mute, stale events, tool scope gating, cancelled approvals and playback-result policy. The optional `--realtime` check sends only synthesized test speech into WebRTC (no microphone capture): it interrupts an answer with a second request in the same call, then tests real voice-to-Astra delegation and dynamic-tool image delivery using a synthetic screen. It requires the existing sign-in and internet access.
+
 The optional `--codex-fixture` command also launches the real installed Codex runtime against a local synthetic HTTP model fixture. It checks completion, isolated account state, image delivery, and actual tool exposure. It uses no cloud model request or real screen capture. A sandbox must permit binding a loopback port and launching Codex for this check.
 
 `scripts/Build-Mac.sh` also verifies the finished bundle's local code signature. Manual desktop acceptance should cover sign-in, a real streamed answer, screenshot permission/selection/cancellation, image interpretation, follow-ups, copy, speech, menu/hotkey reopen, and quit with no surviving owned helper.
+
+### Version 0.5.0 — September 11, 2026
+
+- Persistent live microphone/voice session, streaming transcripts, mute, interruption and explicit End voice. Synthetic live audio input and a spoken interruption passed in one open connection.
+- Astra Low receives delegated screen/action requests. The client exposes fresh window inspection, accessibility press and approved text entry with target/revision checks.
+- Default regression suite passed. A spoken synthetic screen question delegated to Astra, invoked the real dynamic-tool transport, and produced the correct green-square / MAPLE 472 spoken answer from the supplied image.
+- Initial handoff testing caught a disabled code-mode host: Astra could see tool definitions but could not dispatch them. The live helper now enables that dispatcher through process-local CLI overrides while built-in shell/file/environment actions remain disabled.
+- Installed bundle 0.5.0 (build 6) matches the built executable and passes local signature verification. Screen Recording and Accessibility were refreshed for this bundle; the popup recognizes Spotify as its selected window.
+- Desktop microphone and Spotify action acceptance remain pending. macOS logs identify an old microphone code requirement and a fresh permission prompt for this rebuilt app, despite its existing Settings toggle being on. The user must accept that prompt before the installed microphone and actual Spotify action can be verified. Synthetic audio/handoff tests do not establish this device acceptance.
 
 ### Version 0.4.0 — September 11, 2026
 
@@ -102,4 +115,4 @@ For the opt-in cloud image/follow-up check, quit Little Guy, build it, then run 
 
 ## Remaining Windows-only features
 
-The Mac preview does not yet port Windows UI Automation, pointed-control capture, ring/arrow overlays, circle selection, the structured walkthrough verification state machine, automatic reply-field insertion, Spotify/media commands, the multi-card reply pad, protected history/pins, Google Drive research/export, Kokoro voices, or push-to-talk Whisper transcription. Its walkthrough and reply modes are text guidance. Mac push-to-talk uses Apple on-device speech rather than Whisper. The Windows project and its release workflow remain separate.
+The Mac preview does not yet port Windows UI Automation, pointed-control capture, ring/arrow overlays, circle selection, the structured walkthrough verification state machine, automatic reply-field insertion, the multi-card reply pad, protected history/pins, Google Drive research/export, Kokoro voices, or push-to-talk Whisper transcription. Its walkthrough and reply modes are text guidance. Live voice can inspect and operate exposed Mac accessibility controls; Spotify Play/Pause is the narrow automatic action path. Microphone input and spoken replies use the persistent Codex realtime connection. The Windows project and its release workflow remain separate.

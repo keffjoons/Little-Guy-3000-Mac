@@ -26,6 +26,11 @@ for line in sys.stdin:
         request_id = 'approval' if method == 'test/approval' else 'tool'
         waiting[request_id] = identity
         send({'id': request_id, 'method': 'item/commandExecution/requestApproval' if request_id == 'approval' else 'item/tool/call', 'params': {}})
+    elif method == 'test/action':
+        waiting['action'] = identity
+        send({'id': 'action', 'method': 'item/tool/call', 'params': {'threadId': 'live', 'turnId': 'turn', 'callId': 'fixture', 'tool': 'inspect_window', 'arguments': {}}})
+    elif identity == 'action' and identity in waiting:
+        send({'id': waiting.pop(identity), 'result': value.get('result', {})})
     elif identity in waiting:
         result = {'declined': value.get('result', {}).get('decision') == 'decline'} if identity == 'approval' else {'rejected': value.get('error', {}).get('code') == -32601}
         send({'id': waiting.pop(identity), 'result': result})

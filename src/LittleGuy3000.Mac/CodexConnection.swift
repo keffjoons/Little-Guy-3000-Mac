@@ -22,7 +22,13 @@ protocol CodexVoiceBackend: AnyObject {
 }
 
 @MainActor
-final class CodexConnection: CodexTransport {
+protocol CodexActionTransport: CodexTransport {
+    var toolCall: (([String: Any]) async -> [String: Any])? { get set }
+}
+
+@MainActor
+final class CodexConnection: CodexActionTransport {
+    private let clientTools: Bool
     private var process: Process?
     private var input: FileHandle?
     private var nextID = 0
@@ -30,6 +36,10 @@ final class CodexConnection: CodexTransport {
     private var timeouts: [Int: Task<Void, Never>] = [:]
     var notification: ((String, [String: Any]) -> Void)?
     var disconnected: (() -> Void)?
+    // Installed only by a live session. Ordinary question sessions continue to deny tools.
+    var toolCall: (([String: Any]) async -> [String: Any])?
+
+    init(clientTools: Bool = false) { self.clientTools = clientTools }
 
     static func executable() -> String? {
         let saved = UserDefaults.standard.string(forKey: "codexExecutable")
@@ -62,7 +72,10 @@ final class CodexConnection: CodexTransport {
         try configuration.write(to: home.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
         let child = Process(), stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
         child.executableURL = URL(fileURLWithPath: executable)
-        child.arguments = ["app-server", "--listen", "stdio://"]
+        // Astra's client functions require the code-mode dispatcher. Enable that
+        // host only for the live helper; shell/file/environment tools stay disabled.
+        child.arguments = (clientTools ? ["-c", "features.code_mode_host=true", "-c", "features.code_mode=true"] : [])
+            + ["app-server", "--listen", "stdio://"]
         child.currentDirectoryURL = workspace
         let inherited = ProcessInfo.processInfo.environment
         var environment: [String: String] = [:]
@@ -104,7 +117,7 @@ final class CodexConnection: CodexTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.4.0"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.5.0"],
                 "capabilities": ["experimentalApi": true]
             ])
             try write(["method": "initialized"])
@@ -141,6 +154,15 @@ final class CodexConnection: CodexTransport {
         }
         if let method = value["method"] as? String {
             if let id = value["id"] {
+                if method == "item/tool/call", let handler = toolCall, let child = process {
+                    let params = value["params"] as? [String: Any] ?? [:]
+                    Task { [weak self, weak child] in
+                        let result = await handler(params)
+                        guard let self, let child, self.process === child else { return }
+                        try? self.write(["id": id, "result": result])
+                    }
+                    return
+                }
                 // Guide mode never approves actions or supplies host tools.
                 if method == "item/commandExecution/requestApproval" || method == "item/fileChange/requestApproval" {
                     try? write(["id": id, "result": ["decision": "decline"]])

@@ -2,7 +2,11 @@
 
 ## Mac preview
 
-The Mac port uses Apple on-device microphone transcription and Codex cloud voice for spoken replies. When Read answers aloud is enabled, answer text is sent to a separate ephemeral Codex realtime session through the existing Little Guy ChatGPT sign-in. WebRTC receives generated audio and sends a silent audio track to keep the duplex transport active; it does not capture or upload microphone audio. Playback uses an in-memory, nonpersistent WebKit page and stops when dismissed, interrupted, or disabled. The Mac-specific capture and account boundaries are documented in [the Mac guide](docs/MACOS.md#privacy-and-boundaries).
+Live voice streams microphone audio to Codex through Little Guy's existing ChatGPT sign-in. It starts only when you choose Live voice or hold the shortcut, stays connected between turns, and ends on End voice, Escape, dismissal, sleep, or Quit. Mute disables outgoing microphone tracks. A nonpersistent WebKit page handles WebRTC, echo cancellation and received audio; the app does not write microphone recordings to disk.
+
+When screen context is enabled, Astra may request a fresh screenshot and accessibility controls of the selected window. Those results go to the connected model. Accessibility controls are scoped to that window and invalidated when the target or request changes. An explicit request to Play/Pause in Spotify permits one matching playback action; other presses and text entry require approval inside Little Guy. Password fields are excluded. The app checks the control again before acting and reports observations rather than treating an accepted press as proof of success. It does not expose shell execution, arbitrary network requests, or file tools.
+
+Typed-answer narration remains a separate read-aloud feature. Account, capture and retention details are documented in [the Mac guide](docs/MACOS.md#privacy-and-boundaries).
 
 ## Windows preview
 

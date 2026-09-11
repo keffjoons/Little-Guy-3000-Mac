@@ -29,6 +29,32 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
     src/LittleGuy3000.Mac/SpeechController.swift tests/Mac/SpeechTests.swift -o .local/mac-speech-tests
 .local/mac-speech-tests
+xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+    src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+    src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+    src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
+    tests/Mac/RealtimeTests.swift -o .local/mac-realtime-tests
+.local/mac-realtime-tests
+if [ "${1:-}" = "--realtime" ]; then
+    /usr/bin/say -v Samantha -o .local/live-first.aiff 'Please count slowly from one to fifty.'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/live-first.aiff .local/live-first.wav
+    /usr/bin/say -v Samantha -o .local/live-interrupt.aiff 'Stop. Say only peach.'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/live-interrupt.aiff .local/live-interrupt.wav
+    xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+        src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+        src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
+        tests/Mac/RealtimeLiveTests.swift -o .local/mac-realtime-live-tests
+    .local/mac-realtime-live-tests
+    /usr/bin/say -v Samantha -o .local/live-screen.aiff 'What colour is the square on my screen, and what verification code is shown?'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/live-screen.aiff .local/live-screen.wav
+    xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+        src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+        src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
+        tests/Mac/RealtimeHandoffTests.swift -o .local/mac-realtime-handoff-tests
+    .local/mac-realtime-handoff-tests
+fi
 if [ "${1:-}" = "--codex-fixture" ]; then
     python3 scripts/Verify-Codex.py
 fi
