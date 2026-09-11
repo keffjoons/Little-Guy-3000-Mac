@@ -100,12 +100,13 @@ import AppKit
         quick.beginLiveVoice = { holds += 1 }
         quick.endLiveInput = { releases += 1 }
         quick.keyDown(); quick.keyDown()
+        precondition(holds == 1, "Live input starts synchronously on keydown")
         try await Task.sleep(for: .milliseconds(350))
         precondition(holds == 1, "Repeat keydown must not restart a call")
         quick.keyUp(); precondition(releases == 1, "Releasing must mute live input")
         quick.keyDown(); quick.keyUp()
         try await Task.sleep(for: .milliseconds(350))
-        precondition(holds == 1, "A released short tap must not start late input")
+        precondition(holds == 2 && releases == 2, "A short press captures immediately and mutes on release, with no delayed restart")
         backend.available = false; await session.reconnect()
         session.draft = "Missing Astra"; quick.send()
         precondition(backend.turns.count == 3 && session.error?.contains("Astra") == true)

@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 MainActor.assumeIsolated { self?.live.stop(); self?.quick.cancel(); self?.speech.stop() }
             })
         }
+        sleepObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.warmVoiceIfAllowed() }
+        })
         session.completedAnswer = { [weak self] answer in
             guard let self else { return }
             if self.session.speakAnswers && !self.live.active { self.speak(answer) }
@@ -112,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func updateOverlay() {
         guard !terminating, !window.isVisible else { bubble.orderOut(nil); return }
         let transcript = currentTranscript
-        let indicator = ListeningIndicator.state(held: quick.shortcutHeld, connected: live.connected, muted: live.muted)
+        let indicator = ListeningIndicator.state(held: quick.shortcutHeld, connected: live.inputReady, muted: live.muted)
         let opacity = visibility.opacity(for: transcript,
             busy: indicator != .idle || live.speaking || speech.speaking || session.busy, indicator: indicator,
             at: ProcessInfo.processInfo.systemUptime)
@@ -218,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             session.error = "The app’s resources are missing. Rebuild Little Guy."; return
         }
         let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
-        Task { await session.connect(executable: executable, home: home, configuration: configuration) }
+        Task { await session.connect(executable: executable, home: home, configuration: configuration); warmVoiceIfAllowed() }
     }
 
     @objc private func capture() {
@@ -284,6 +287,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     private func stopSpeech() { speech.stop() }
+    private func warmVoiceIfAllowed() {
+        guard !terminating, !window.isVisible, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        startLiveVoice()
+    }
     private func startLiveVoice() {
         guard !live.active, !session.busy, session.connection == .ready else { return }
         guard let executable = CodexConnection.executable(),
@@ -322,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showQuick(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { stopSpeech(); sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { stopSpeech(); sender.orderOut(nil); warmVoiceIfAllowed(); return false }
     func applicationWillTerminate(_ notification: Notification) {
         terminating = true; live.stop(); quick.cancel(); overlayTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }

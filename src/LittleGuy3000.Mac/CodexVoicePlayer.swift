@@ -89,22 +89,64 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
 
     static let html = page(conversation: false)
 
+    // Only held speech is retained. Startup audio drains in order once the
+    // connection is ready, even when the user has already released the key.
+    static let inputWorklet = """
+    class HeldInputBuffer extends AudioWorkletProcessor {
+      constructor() {
+        super(); this.held = false; this.ready = false;
+        this.queue = []; this.head = 0; this.samples = 0;
+        this.port.onmessage = ({data}) => {
+          if (data.type === 'held') this.held = data.value;
+          if (data.type === 'ready') this.ready = true;
+        };
+      }
+      process(inputs, outputs) {
+        const output = outputs[0][0]; output.fill(0);
+        const input = inputs[0] && inputs[0][0];
+        if (this.held && input) {
+          if (this.samples + input.length > sampleRate * 30) {
+            this.held = false; this.queue = []; this.head = 0; this.samples = 0;
+            this.port.postMessage({error:'Voice connection took too long. Your recording was cleared; please try again.'});
+            return true;
+          }
+          this.queue.push(new Float32Array(input)); this.samples += input.length;
+        }
+        if (this.ready && this.head < this.queue.length) {
+          const next = this.queue[this.head++]; output.set(next); this.samples -= next.length;
+          this.queue[this.head - 1] = null;
+          if (this.head === this.queue.length) { this.queue = []; this.head = 0; }
+          else if (this.head >= 1024) { this.queue = this.queue.slice(this.head); this.head = 0; }
+        }
+        return true;
+      }
+    }
+    registerProcessor('held-input-buffer', HeldInputBuffer);
+    """
+
     static func page(conversation: Bool, syntheticInput: Bool = false) -> String {
         let input = conversation && !syntheticInput ? """
         microphone = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
         if (closed) { microphone.getTracks().forEach(track => track.stop()); return; }
-        microphone.getTracks().forEach(track => { track.enabled = false; pc.addTrack(track,microphone); });
-        send({microphone:true});
+        microphone.getTracks().forEach(track => { track.enabled = false; });
+        const micSource = ac.createMediaStreamSource(microphone); micSource.connect(inputProcessor);
         """ : """
         oscillator = ac.createOscillator(); const gain = ac.createGain(); gain.gain.value = 0;
-        destination = ac.createMediaStreamDestination();
-        oscillator.connect(gain).connect(destination); oscillator.start();
-        pc.addTrack(destination.stream.getAudioTracks()[0], destination.stream);
+        oscillator.connect(gain).connect(\(conversation ? "inputProcessor" : "destination")); oscillator.start();
         """
+        let workletJSON = String(decoding: try! JSONSerialization.data(withJSONObject: inputWorklet, options: [.fragmentsAllowed]), as: UTF8.self)
+        let bufferSetup = conversation ? """
+        const moduleURL = URL.createObjectURL(new Blob([\(workletJSON)], {type:'text/javascript'}));
+        try { await ac.audioWorklet.addModule(moduleURL); } finally { URL.revokeObjectURL(moduleURL); }
+        if (closed) return;
+        inputProcessor = new AudioWorkletNode(ac, 'held-input-buffer', {channelCount:1,channelCountMode:'explicit',outputChannelCount:[1]});
+        inputProcessor.port.onmessage = ({data}) => { if (data.error) send(data); };
+        inputProcessor.connect(destination);
+        """ : ""
         return """
     <!doctype html><html><body><audio id="audio" autoplay></audio><script>
     const send = message => window.webkit.messageHandlers.voice.postMessage(message);
-    let pc, ac, oscillator, timer, analyser, source, microphone, destination;
+    let pc, ac, oscillator, timer, analyser, source, microphone, destination, inputProcessor;
     let finishedAt = 0, lastSound = 0, heard = false, closed = false;
     const audio = document.getElementById('audio');
     let outputEnabled = \(!conversation);
@@ -117,22 +159,34 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
       if (closed) return; closed = true;
       clearInterval(timer); audio.pause(); audio.srcObject = null;
       if (microphone) microphone.getTracks().forEach(track => track.stop());
+      if (inputProcessor) inputProcessor.disconnect();
       if (pc) pc.close(); if (oscillator) oscillator.stop(); if (ac) void ac.close();
     }
     window.addEventListener('pagehide', closeVoice);
-    function setMuted(muted) { if (microphone) microphone.getAudioTracks().forEach(track => track.enabled = !muted); }
+    function setMuted(muted) {
+      if (inputProcessor) inputProcessor.port.postMessage({type:'held',value:!muted});
+      if (microphone) microphone.getAudioTracks().forEach(track => track.enabled = !muted);
+    }
     async function playTestInput(base64) {
       const bytes = Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
       const buffer = await ac.decodeAudioData(bytes.buffer);
       const input = ac.createBufferSource(); input.buffer = buffer;
-      input.connect(destination); input.start();
+      input.connect(inputProcessor || destination); input.start();
     }
     (async () => {
       pc = new RTCPeerConnection(); ac = new AudioContext();
       await ac.resume();
+      destination = ac.createMediaStreamDestination();
+      \(bufferSetup)
       \(input)
+      if (closed) return;
+      pc.addTrack(destination.stream.getAudioTracks()[0], destination.stream);
+      if (\(conversation)) send({microphone:true});
       const channel = pc.createDataChannel('oai-events');
-      channel.onopen = () => send({ready:true});
+      channel.onopen = () => {
+        if (inputProcessor) inputProcessor.port.postMessage({type:'ready'});
+        send({ready:true});
+      };
       channel.onmessage = event => {
         try {
           const message = JSON.parse(event.data);
@@ -151,10 +205,6 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
         void audio.play().catch(() => send({error:'Audio playback was blocked. Try Preview voice again.'}));
       };
       await pc.setLocalDescription(await pc.createOffer());
-      if (pc.iceGatheringState !== 'complete') await new Promise(resolve => {
-        const changed = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', changed); resolve(); } };
-        pc.addEventListener('icegatheringstatechange', changed); setTimeout(resolve, 2500);
-      });
       send({sdp:pc.localDescription.sdp});
       const samples = new Float32Array(1024);
       timer = setInterval(() => {

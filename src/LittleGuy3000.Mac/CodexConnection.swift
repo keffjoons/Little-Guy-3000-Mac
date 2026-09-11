@@ -119,7 +119,7 @@ final class CodexConnection: CodexActionTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.6.0"],
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.6.1"],
                 "capabilities": ["experimentalApi": true, "mcpServerOpenaiFormElicitation": true]
             ])
             try write(["method": "initialized"])

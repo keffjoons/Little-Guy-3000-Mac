@@ -35,6 +35,7 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
     tests/Mac/RealtimeTests.swift -o .local/mac-realtime-tests
 .local/mac-realtime-tests
+node tests/Mac/VoiceInputBufferTests.js
 xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/QuickTranscript.swift tests/Mac/TranscriptTests.swift -o .local/mac-transcript-tests
 .local/mac-transcript-tests
@@ -94,4 +95,15 @@ if [ "${1:-}" = "--native" ]; then
     cp .local/native-acceptance "$ROOT/.local/Native Acceptance.app/Contents/MacOS/LittleGuy3000"
     python3 scripts/Sign-Mac.py "$ROOT/.local/Native Acceptance.app"
     "$ROOT/.local/Native Acceptance.app/Contents/MacOS/LittleGuy3000"
+fi
+
+if [ "${1:-}" = "--cold-voice" ]; then
+    /usr/bin/say -v Samantha -r 180 -o .local/cold-voice.aiff 'Please repeat the words orange purple and banana.'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/cold-voice.aiff .local/cold-voice.wav
+    xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+        src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/NativeComputerUse.swift \
+        src/LittleGuy3000.Mac/WindowActions.swift src/LittleGuy3000.Mac/PointerCapture.swift \
+        src/LittleGuy3000.Mac/ImageAttachment.swift tests/Mac/ColdVoiceLiveTests.swift -o .local/cold-voice-test
+    .local/cold-voice-test
 fi

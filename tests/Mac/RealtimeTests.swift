@@ -7,7 +7,8 @@ import AppKit
     var appAccessRequest: (([String: Any]) -> [String: Any])?
     var calls: [(String, [String: Any])] = []
     var stops = 0
-    func start(executable: String, home: URL, configuration: String) async throws {}
+    var startBarrier: (() async -> Void)?
+    func start(executable: String, home: URL, configuration: String) async throws { await startBarrier?() }
     func stop() { stops += 1 }
     func request(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
         calls.append((method, params))
@@ -141,6 +142,28 @@ import AppKit
         precondition(page.contains("let outputEnabled = false") && page.contains("audio.muted = !outputEnabled"))
         precondition(page.contains("getUserMedia") && page.contains("echoCancellation:true") && page.contains("track.stop()"))
         precondition(!CodexVoicePlayer.html.contains("getUserMedia"))
+        let slowBackend = RealtimeBackend(), earlyPlayer = RealtimePlayer()
+        var connection: CheckedContinuation<Void, Never>?
+        slowBackend.startBarrier = { await withCheckedContinuation { connection = $0 } }
+        let early = LiveConversation(transport: slowBackend, player: earlyPlayer, nativeComputerUse: false)
+        early.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: nil, screenEnabled: false, syntheticInput: true)
+        early.setShortcutHeld(true); await settle()
+        precondition(earlyPlayer.prepares == 1 && slowBackend.calls.isEmpty, "Microphone setup precedes network setup")
+        earlyPlayer.event?(["microphone": true]); earlyPlayer.event?(["sdp": "early offer"])
+        precondition(early.inputReady && !early.connected && !earlyPlayer.muted, "Record held speech locally during connection setup")
+        early.setShortcutHeld(false); connection?.resume(); await settle()
+        precondition(earlyPlayer.prepares == 1 && earlyPlayer.muted, "Connecting must not replace the prepared microphone or reopen released input")
+        precondition(slowBackend.calls.contains { $0.0 == "thread/realtime/start" && ($0.1["transport"] as? [String: String])?["sdp"] == "early offer" })
+        early.setShortcutHeld(true)
+        slowBackend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "user", "text": "First sentence."])
+        slowBackend.emit("thread/realtime/transcript/delta", ["threadId": "live", "role": "user", "delta": "Second"])
+        precondition(early.heardText == "First sentence. Second")
+        slowBackend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "user", "text": "Second sentence."])
+        precondition(early.heardText == "First sentence. Second sentence.")
+        precondition(early.actions.userIntent == early.heardText)
+        early.stop(); precondition(!early.inputReady)
+        try! CodexVoicePlayer.inputWorklet.write(toFile: ".local/voice-input-worklet.js", atomically: true, encoding: .utf8)
+        print("PASS: early microphone setup, pending SDP, release during connection and complete multi-segment speech")
         let nativeBackend = RealtimeBackend(), nativePlayer = RealtimePlayer()
         let pluginRoot = FileManager.default.temporaryDirectory.appendingPathComponent("native-plugin-test-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: pluginRoot) }

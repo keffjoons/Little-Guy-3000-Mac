@@ -16,10 +16,10 @@ config = '\n'.join(line.strip() for line in match.group(1).splitlines()) + '\n'
 shutil.copyfile(root/'src/LittleGuy3000.Desktop/Assets/Square150x150Logo.scale-200.png', app/'Contents/Resources/LittleGuy.png')
 info = dict(CFBundleExecutable='LittleGuy3000', CFBundleIdentifier='com.littleguy3000.mac',
             CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000', CFBundleIconFile='LittleGuy.png',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.6.0', CFBundleVersion='12',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.6.1', CFBundleVersion='13',
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSScreenCaptureUsageDescription='See the window under your pointer when you ask Little Guy a question.',
-            NSMicrophoneUsageDescription='Stream your microphone to Codex only while you hold the talk shortcut. Release it to mute.',
+            NSMicrophoneUsageDescription='Capture speech only while you hold the talk shortcut, then send it to Codex. Release it to mute.',
             NSSpeechRecognitionUsageDescription='Turn your spoken question into text using on-device speech recognition.')
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(info, f)
 PY

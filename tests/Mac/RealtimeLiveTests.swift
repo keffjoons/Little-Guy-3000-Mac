@@ -16,6 +16,7 @@ import AppKit
                 let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
                 let config = try String(contentsOfFile: "artifacts/Little Guy 3000.app/Contents/Resources/guide-config.toml", encoding: .utf8)
                 tested.start(in: window.contentView!, executable: CodexConnection.executable()!, home: home, configuration: config, target: nil, screenEnabled: false, syntheticInput: true)
+                tested.setShortcutHeld(true)
                 var interrupted = false, previous = ""
                 let deadline = Date().addingTimeInterval(100)
                 while Date() < deadline {

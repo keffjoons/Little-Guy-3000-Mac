@@ -63,10 +63,11 @@ final class QuickCompanion {
     func keyDown() {
         guard !pressed, !active, !session.busy else { return }
         pressed = true
+        if let begin = beginLiveVoice { begin(); return }
         hold = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
             guard let self, self.pressed else { return }
-            if let begin = self.beginLiveVoice { begin() } else { self.startVoice() }
+            self.startVoice()
         }
     }
 

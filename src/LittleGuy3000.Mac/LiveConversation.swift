@@ -6,6 +6,7 @@ import Observation
 final class LiveConversation {
     private(set) var active = false
     private(set) var connected = false
+    private(set) var inputReady = false
     private(set) var speaking = false
     private(set) var muted = true
     private(set) var status = ""
@@ -20,6 +21,8 @@ final class LiveConversation {
     @ObservationIgnored private var startup: Task<Void, Never>?
     @ObservationIgnored private var timeout: Task<Void, Never>?
     @ObservationIgnored private var starting = false
+    @ObservationIgnored private var pendingSDP: String?
+    @ObservationIgnored private var completedUserText = ""
     @ObservationIgnored private var userTurn = false
     @ObservationIgnored private var assistantTurn = false
     @ObservationIgnored private var hasUserInput = false
@@ -83,6 +86,9 @@ final class LiveConversation {
                     }
                 }
                 guard self.generation == token else { return }
+                // Capture locally before account/MCP/network setup. The player
+                // buffers held speech until its WebRTC connection is ready.
+                self.player.prepareConversation(in: host, syntheticInput: syntheticInput)
                 try await self.transport.start(executable: executable, home: home, configuration: configuration)
                 guard self.generation == token else { return }
                 let account = try await self.transport.request("account/read", [:])
@@ -100,7 +106,7 @@ final class LiveConversation {
                 guard self.generation == token else { return }
                 guard let id = (response["thread"] as? [String: Any])?["id"] as? String else { throw CompanionError.message("Codex did not start the live session.") }
                 self.threadID = id
-                self.player.prepareConversation(in: host, syntheticInput: syntheticInput)
+                self.startRealtimeIfReady(token: token)
             } catch {
                 guard self.generation == token else { return }; self.fail(error.localizedDescription)
             }
@@ -122,6 +128,7 @@ final class LiveConversation {
         if held && muted {
             hasUserInput = false; speaking = false; player.setOutputEnabled(false)
             actions.userIntent = ""; heardText = ""; replyText = ""; userTurn = false; assistantTurn = false
+            completedUserText = ""
             refreshScreen()
             updateScreenContext(force: true)
         }
@@ -146,7 +153,8 @@ final class LiveConversation {
         }
     }
     func stop() {
-        active = false; connected = false; speaking = false; generation = UUID()
+        active = false; connected = false; inputReady = false; speaking = false; generation = UUID()
+        pendingSDP = nil; completedUserText = ""
         hasUserInput = false
         startup?.cancel(); timeout?.cancel(); contextUpdate?.cancel(); contextUpdate = nil; sentContext = ""
         invalidateScreen()
@@ -229,15 +237,10 @@ final class LiveConversation {
 
     private func playerEvent(_ body: [String: Any], token: UUID) {
         if let message = body["error"] as? String { fail(message); return }
-        if body["microphone"] as? Bool == true { player.setMuted(muted) }
-        if let sdp = body["sdp"] as? String, let id = threadID, !starting {
-            starting = true
-            Task { [weak self] in
-                guard let self, self.generation == token else { return }
-                let parameters = Self.startParameters(id: id, sdp: sdp, nativeComputerUse: self.nativeComputerUse)
-                do { _ = try await self.transport.request("thread/realtime/start", parameters) }
-                catch { guard self.generation == token else { return }; self.fail(error.localizedDescription) }
-            }
+        if body["microphone"] as? Bool == true { inputReady = true; player.setMuted(muted) }
+        if let sdp = body["sdp"] as? String {
+            pendingSDP = sdp
+            startRealtimeIfReady(token: token)
         }
         if body["ready"] as? Bool == true {
             connected = true; timeout?.cancel(); status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute"
@@ -251,6 +254,15 @@ final class LiveConversation {
         if body["audible"] as? Bool == true, hasUserInput { speaking = true; status = "Speaking · hold ⌃⌥Space to interrupt" }
         if body["quiet"] as? Bool == true { speaking = false; status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute" }
     }
+    private func startRealtimeIfReady(token: UUID) {
+        guard let sdp = pendingSDP, let id = threadID, !starting else { return }
+        starting = true
+        Task { [weak self] in
+            guard let self, self.generation == token else { return }
+            do { _ = try await self.transport.request("thread/realtime/start", Self.startParameters(id: id, sdp: sdp, nativeComputerUse: self.nativeComputerUse)) }
+            catch { guard self.generation == token else { return }; self.fail(error.localizedDescription) }
+        }
+    }
     private func receive(_ method: String, _ body: [String: Any]) {
         guard active, body["threadId"] as? String == threadID else { return }
         switch method {
@@ -259,7 +271,7 @@ final class LiveConversation {
             let delta = body["delta"] as? String ?? ""
             if body["role"] as? String == "user" {
                 acceptUserInput(delta)
-                if !userTurn { heardText = ""; userTurn = true }
+                if !userTurn { heardText = completedUserText.isEmpty ? "" : completedUserText + " "; userTurn = true }
                 heardText = String((heardText + delta).suffix(20_000))
             } else {
                 guard hasUserInput else { return }
@@ -268,7 +280,13 @@ final class LiveConversation {
             }
         case "thread/realtime/transcript/done":
             let text = body["text"] as? String ?? ""
-            if body["role"] as? String == "user" { acceptUserInput(text); heardText = text; userTurn = false; actions.userIntent = text }
+            if body["role"] as? String == "user" {
+                acceptUserInput(text)
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    completedUserText = String((completedUserText.isEmpty ? text : completedUserText + " " + text).suffix(20_000))
+                }
+                heardText = completedUserText; userTurn = false; actions.userIntent = completedUserText
+            }
             else if hasUserInput { replyText = text; assistantTurn = false }
         case "thread/realtime/error": fail("The live voice service reported an error. End and restart the conversation.")
         case "thread/realtime/closed": fail("The live voice connection ended. Start voice again to continue.")
