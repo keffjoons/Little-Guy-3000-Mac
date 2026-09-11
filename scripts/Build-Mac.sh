@@ -16,7 +16,7 @@ config = '\n'.join(line.strip() for line in match.group(1).splitlines()) + '\n'
 shutil.copyfile(root/'src/LittleGuy3000.Desktop/Assets/Square150x150Logo.scale-200.png', app/'Contents/Resources/LittleGuy.png')
 info = dict(CFBundleExecutable='LittleGuy3000', CFBundleIdentifier='com.littleguy3000.mac',
             CFBundleName='Little Guy 3000', CFBundleDisplayName='Little Guy 3000', CFBundleIconFile='LittleGuy.png',
-            CFBundlePackageType='APPL', CFBundleShortVersionString='0.5.1', CFBundleVersion='7',
+            CFBundlePackageType='APPL', CFBundleShortVersionString='0.5.2', CFBundleVersion='8',
             LSMinimumSystemVersion='14.0', NSHighResolutionCapable=True,
             NSScreenCaptureUsageDescription='See the window under your pointer when you ask Little Guy a question.',
             NSMicrophoneUsageDescription='Stream your microphone to Codex only while you hold the talk shortcut. Release it to mute.',

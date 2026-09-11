@@ -7,28 +7,27 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let session = CompanionSession(transport: CodexConnection())
     private var window: NSWindow!
-    private var companion: NSPanel!
     private var bubble: CompanionPanel!
     private var bubbleHost: NSHostingView<QuickCompanionView>!
     private lazy var quick = QuickCompanion(session: session, voice: VoiceInput(), capture: PointerCapture.capture)
     private var anchor = NSPoint.zero
-    private var permissionCheck = Date.distantPast
-    private var face: CompanionView!
     private var statusItem: NSStatusItem!
     private var hotKey: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
-    private var companionTimer: Timer?
+    private var overlayTimer: Timer?
+    private var visibility = TranscriptVisibility()
+    private var shownTranscript = QuickTranscript()
     private var picker: ScreenCapturePicker?
     private var localMonitor: Any?
+    private var dismissalMonitor: Any?
     private var localShortcutDown = false
-    private var hidden = false
     private var terminating = false
     private lazy var speech = SpeechController(backend: session)
     private let live = LiveConversation()
     private var sleepObservers: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        buildWindow(); buildCompanion(); buildBubble(); buildMenu(); registerHotKey()
+        buildWindow(); buildBubble(); buildOverlayTimer(); buildMenu(); registerHotKey()
         quick.stopSpeech = { [weak self] in self?.stopSpeech() }
         quick.beginLiveVoice = { [weak self] in
             guard let self else { return }
@@ -64,7 +63,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             return handled ? nil : event
         }
-        showQuick()
+        // The transcript never steals focus, so observe Escape in the foreground app too.
+        dismissalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.live.active || self.bubble.isVisible else { return }
+                self.cancelInteraction()
+            }
+        }
         if !CommandLine.arguments.contains("--ui-test") { connect() }
     }
 
@@ -84,41 +90,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             previewSpeech: { [weak self] in self?.speak("Hi, I’m Little Guy. I’m here when you need a hand.") }))
     }
 
-    private func buildCompanion() {
-        companion = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 76, height: 76),
-                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        companion.isOpaque = false; companion.backgroundColor = .clear; companion.hasShadow = false
-        companion.level = .floating; companion.hidesOnDeactivate = false
-        companion.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        companion.isMovableByWindowBackground = true
-        face = CompanionView(frame: NSRect(x: 0, y: 0, width: 76, height: 76))
-        face.clicked = { [weak self] in self?.showQuick() }; companion.contentView = face
-        if let frame = NSScreen.main?.visibleFrame { companion.setFrameOrigin(NSPoint(x: frame.maxX - 100, y: frame.minY + 40)) }
-        companionTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.face.thinking = self.session.busy; self.face.reduceMotion = self.session.reducedMotion
-                let visible = !self.hidden && self.session.showCompanion && (!self.session.isCapturing || self.quick.active)
-                if visible && !self.companion.isVisible { self.companion.orderFrontRegardless() }
-                else if !visible && self.companion.isVisible { self.companion.orderOut(nil) }
-                if Date().timeIntervalSince(self.permissionCheck) > 2 {
-                    self.quick.screenPermitted = PointerCapture.permitted; self.permissionCheck = Date()
-                }
-                if self.bubble.isVisible {
-                    let height = min(self.bubbleHost.fittingSize.height, 650)
-                    if abs(self.bubble.frame.height - height) > 1 {
-                        self.bubble.setContentSize(NSSize(width: 376, height: height))
-                        self.positionBubble()
-                    }
-                }
-                guard visible, self.session.followPointer, !self.window.isVisible, !self.bubble.isVisible else { return }
-                let point = NSEvent.mouseLocation
-                guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
-                let frame = screen.visibleFrame
-                self.companion.setFrameOrigin(NSPoint(x: min(max(point.x + 24, frame.minX), frame.maxX - 76),
-                                                     y: min(max(point.y - 84, frame.minY), frame.maxY - 76)))
-            }
+    private var currentTranscript: QuickTranscript {
+        if live.active || !live.heardText.isEmpty || !live.replyText.isEmpty || live.error != nil {
+            return QuickTranscript(user: live.heardText, agent: live.error ?? live.replyText)
         }
+        let messages = session.messages
+        guard let index = messages.lastIndex(where: { $0.role == .user }) else {
+            return QuickTranscript(agent: session.error ?? "")
+        }
+        let reply = messages[index...].last(where: { $0.role == .assistant })?.text ?? ""
+        return QuickTranscript(user: messages[index].text, agent: session.error ?? reply)
+    }
+
+    private func buildOverlayTimer() {
+        overlayTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateOverlay() }
+        }
+    }
+
+    private func updateOverlay() {
+        guard !terminating, !window.isVisible else { bubble.orderOut(nil); return }
+        let transcript = currentTranscript
+        let opacity = visibility.opacity(for: transcript,
+            busy: !live.muted || live.speaking || speech.speaking || session.busy,
+            at: ProcessInfo.processInfo.systemUptime)
+        guard opacity > 0 else { bubble.orderOut(nil); return }
+        if transcript != shownTranscript {
+            shownTranscript = transcript
+            bubbleHost.rootView = QuickCompanionView(transcript: transcript)
+            bubble.setContentSize(NSSize(width: 332, height: bubbleHost.fittingSize.height))
+            positionBubble()
+        }
+        bubble.alphaValue = opacity
+        if !bubble.isVisible { bubble.orderFrontRegardless() }
     }
 
     private func buildMenu() {
@@ -138,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "face.smiling", accessibilityDescription: "Little Guy")
         let menu = NSMenu()
         menu.addItem(withTitle: "Ask Little Guy  ⌃⌥Space", action: #selector(showQuick), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Type a question…", action: #selector(showPanel), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Attach window…", action: #selector(capture), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Hide Little Guy", action: #selector(hideAll), keyEquivalent: "").target = self
@@ -146,17 +151,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func buildBubble() {
-        bubble = CompanionPanel(contentRect: NSRect(x: 0, y: 0, width: 376, height: 380),
+        bubble = CompanionPanel(contentRect: NSRect(x: 0, y: 0, width: 332, height: 60),
                                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         bubble.title = "Little Guy · Quick ask"
         bubble.isOpaque = false; bubble.backgroundColor = .clear; bubble.hasShadow = true
         bubble.level = .floating; bubble.hidesOnDeactivate = false
         bubble.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        bubbleHost = NSHostingView(rootView: QuickCompanionView(quick: quick, speech: speech, live: live,
-            startLive: { [weak self] in self?.startLiveVoice() },
-            settings: { [weak self] in self?.showSettings() }, details: { [weak self] in self?.showPanel() },
-            dismiss: { [weak self] in self?.hideAll() }, enableScreen: { PointerCapture.requestAccess() },
-            stop: { [weak self] in self?.cancelInteraction() }))
+        bubble.ignoresMouseEvents = true
+        bubbleHost = NSHostingView(rootView: QuickCompanionView(transcript: QuickTranscript()))
         bubble.contentView = bubbleHost
     }
 
@@ -172,17 +174,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         quick.screenPermitted = PointerCapture.permitted
         live.setContext(target: quick.target, enabled: quick.screenEnabled)
         if window.isVisible { stopSpeech() }
-        hidden = false; window.orderOut(nil)
-        positionBubble(); bubble.makeKeyAndOrderFront(nil)
+        window.orderOut(nil)
+        visibility.show(at: ProcessInfo.processInfo.systemUptime)
+        positionBubble(); updateOverlay()
     }
 
     private func positionBubble() {
         let screen = NSScreen.screens.first(where: { $0.frame.contains(anchor) }) ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
         let x = min(max(anchor.x + 20, frame.minX), frame.maxX - bubble.frame.width)
-        let y = min(max(anchor.y - bubble.frame.height - 18, frame.minY + 76), frame.maxY - bubble.frame.height)
+        let y = min(max(anchor.y - bubble.frame.height - 18, frame.minY + 12), frame.maxY - bubble.frame.height)
         bubble.setFrameOrigin(NSPoint(x: x, y: y))
-        companion.setFrameOrigin(NSPoint(x: x + 14, y: y - 70))
     }
 
     private func registerHotKey() {
@@ -219,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         live.stop()
         stopSpeech()
         session.isCapturing = true; session.error = nil; session.notice = nil
-        quick.cancel(); bubble.orderOut(nil); companion.orderOut(nil); window.orderOut(nil)
+        visibility.dismiss(); quick.cancel(); bubble.orderOut(nil); window.orderOut(nil)
         let picker = ScreenCapturePicker(); self.picker = picker
         picker.present { [weak self] result in
             guard let self, !self.terminating else { return }
@@ -289,6 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                    target: quick.target, screenEnabled: quick.screenEnabled)
     }
     private func cancelInteraction() {
+        visibility.dismiss(); bubble.orderOut(nil)
         stopSpeech()
         if live.active { live.stop(); return }
         if quick.active { quick.cancel(); return }
@@ -299,25 +302,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func showPanel() {
         guard !terminating else { return }
-        live.stop()
+        live.stop(); visibility.dismiss()
         stopSpeech()
         quick.cancel(); bubble.orderOut(nil)
-        hidden = false; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func showSettings() { showPanel(); session.settingsVisible = true }
     @objc private func hideAll() {
-        live.stop()
+        live.stop(); visibility.dismiss()
         quick.cancel(); bubble.orderOut(nil)
         if session.isCapturing { picker?.cancel() }
         if session.busy { Task { await session.cancel() } }
-        stopSpeech(); hidden = true; window.orderOut(nil); companion.orderOut(nil)
+        stopSpeech(); window.orderOut(nil)
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showQuick(); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func windowShouldClose(_ sender: NSWindow) -> Bool { stopSpeech(); sender.orderOut(nil); return false }
     func applicationWillTerminate(_ notification: Notification) {
-        terminating = true; live.stop(); quick.cancel(); companionTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
+        terminating = true; live.stop(); quick.cancel(); overlayTimer?.invalidate(); stopSpeech(); picker?.cancel(); session.shutdown()
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        if let dismissalMonitor { NSEvent.removeMonitor(dismissalMonitor) }
         for observer in sleepObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         if let hotKey { UnregisterEventHotKey(hotKey) }; if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
     }

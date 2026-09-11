@@ -35,6 +35,9 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
     tests/Mac/RealtimeTests.swift -o .local/mac-realtime-tests
 .local/mac-realtime-tests
+xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+    src/LittleGuy3000.Mac/QuickTranscript.swift tests/Mac/TranscriptTests.swift -o .local/mac-transcript-tests
+.local/mac-transcript-tests
 if [ "${1:-}" = "--realtime" ]; then
     /usr/bin/say -v Samantha -o .local/live-first.aiff 'Please count slowly from one to fifty.'
     /usr/bin/afconvert -f WAVE -d LEI16 .local/live-first.aiff .local/live-first.wav

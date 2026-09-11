@@ -31,18 +31,18 @@ Run `python3 scripts/Verify-Mac-Signing.py` after a build to verify changed bund
 
 ## Use
 
-1. Open Little Guy. A compact bubble appears near the cursor. If disconnected, open its gear button, sign in, and wait for Connected.
+1. Open Little Guy. It stays out of the way until there is a message. Use the menu-bar icon → Settings to sign in or manage permissions.
 2. Enable Microphone and Screen Recording in Settings, plus Accessibility through **Enable window controls…**. macOS may require authentication and an app restart. The app does not listen on launch.
-3. Point at the window you need help with. Hold **Control–Option–Space** to speak; release it to mute immediately. The first hold starts the connection after 300 ms. **Connect voice** prepares the connection with the microphone muted. Hold the shortcut again to speak or interrupt a reply; the connection remains open between requests. Microphone audio goes through your ChatGPT connection only while held.
-4. Releasing the shortcut disables microphone transmission; **End voice** or Escape closes the call and cancels pending actions. Dismissal, opening the full window, display/computer sleep, and Quit also end the call.
+3. Point at the window you need help with. Hold **Control–Option–Space** to speak; release it to mute immediately. The first hold starts the connection after 300 ms. Hold the shortcut again to speak or interrupt a reply; the connection remains open between requests. Microphone audio goes through your ChatGPT connection only while held.
+4. Releasing the shortcut disables microphone transmission; Escape closes the call and cancels pending actions. Explicit dismissal, opening the full window, display/computer sleep, and Quit also end the call. Automatic fading keeps the muted connection ready.
 5. With screen context on, screen questions and action requests are delegated to Astra Low. It can inspect the selected window and operate exposed accessibility controls. “Play this playlist” in Spotify can press the identified playlist control and inspect the result. Spoken or typed requests authorize their actions directly, with no additional approval popup. Spotify playlist links use their exact inspected resource ID to open in the desktop app. Unsupported controls report a limitation; there is no arbitrary coordinate-click or shell fallback.
-6. Tap the shortcut to open the bubble without starting voice. Type and Send for the usual question flow. During a live call, typed messages enter that same conversation. Read answers aloud in Settings controls narration of ordinary typed answers.
+6. The overlay shows only your latest words and one agent reply. It fades six seconds after speech/activity ends, stays hidden when empty, and lets clicks pass through. Tap the shortcut to recall the latest exchange; hold it for a new request. Use the menu-bar icon → Type a question for the full text composer.
 
 The pointer selects the topmost ordinary window before Little Guy appears. Live screen inspections and typed follow-ups capture the same selected window afresh; pointing elsewhere and invoking the shortcut selects a new target. If a window closes, permission is missing, or capture fails, the question stays ready to retry and is not silently sent without its requested context. Captures use `SCShareableContent` plus `SCScreenshotManager`, bounded to 2048 pixels, with no audio or cursor. Nothing continuously records the screen.
 
 The larger window retains **+ → Choose a window…**, local image import, and pasted images. Manual window selection uses the macOS sharing picker and its authorized short stream. These remain useful when sharing a specific image. Explain, Walkthrough, and Draft a reply offer textual guidance and copyable drafts. Click a mode or choose a model to leave compact Astra mode and begin that conversation.
 
-The menu-bar icon and floating character reopen the bubble. Settings controls pointer following, reduced motion, and spoken replies. Closing the full window leaves the menu-bar app running. Hide stops the current interaction; Quit stops the app and its helper. New clears the conversation. Reconnecting restores completed text history, without resending old images.
+The menu-bar icon provides Settings and the full composer. There is no floating character or popup toolbar. Settings controls reduced motion and spoken replies. Closing the full window leaves the menu-bar app running. Hide stops the current interaction; Quit stops the app and its helper. New clears the conversation. Reconnecting restores completed text history, without resending old images.
 
 ## Privacy and boundaries
 
@@ -74,6 +74,12 @@ The default suite tests persistent session lifetime, mute, stale events, tool sc
 The optional `--codex-fixture` command also launches the real installed Codex runtime against a local synthetic HTTP model fixture. It checks completion, isolated account state, image delivery, and actual tool exposure. It uses no cloud model request or real screen capture. A sandbox must permit binding a loopback port and launching Codex for this check.
 
 `scripts/Build-Mac.sh` also verifies the finished bundle's local code signature. Manual desktop acceptance should cover sign-in, a real streamed answer, screenshot permission/selection/cancellation, image interpretation, follow-ups, copy, speech, menu/hotkey reopen, and quit with no surviving owned helper.
+
+### Version 0.5.2 — September 11, 2026
+
+- Replaced the popup with a compact transcript: latest user words and one latest agent reply. Removed the character, title, buttons, composer, status labels and switches from this surface. Settings and typing remain available through the menu bar.
+- Empty launch is invisible. New messages appear near the selected pointer location; the overlay fades six seconds after activity finishes and does not intercept clicks. Escape explicitly dismisses it; late messages cannot reopen an explicitly dismissed overlay. Automatic fading preserves the muted voice connection.
+- Regression tests passed for fade timing, active speech, new-message return, empty content and explicit dismissal. The synthetic native preview displayed only the two text blocks. The installed 0.5.2 executable matches the build and its persistent signing requirement passed update-continuity verification.
 
 ### Version 0.5.1 — September 11, 2026
 

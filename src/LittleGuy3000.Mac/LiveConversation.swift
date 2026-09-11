@@ -6,6 +6,7 @@ import Observation
 final class LiveConversation {
     private(set) var active = false
     private(set) var connected = false
+    private(set) var speaking = false
     private(set) var muted = true
     private(set) var status = ""
     private(set) var heardText = ""
@@ -82,7 +83,7 @@ final class LiveConversation {
     }
     func setShortcutHeld(_ held: Bool) {
         guard active else { return }
-        if held && muted { actions.userIntent = "" }
+        if held && muted { actions.userIntent = ""; heardText = ""; replyText = ""; userTurn = false; assistantTurn = false }
         muted = !held
         player.setMuted(muted)
         status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : (connected ? "Listening · release to mute" : "Connecting voice…")
@@ -98,7 +99,7 @@ final class LiveConversation {
         }
     }
     func stop() {
-        active = false; connected = false; generation = UUID()
+        active = false; connected = false; speaking = false; generation = UUID()
         startup?.cancel(); timeout?.cancel()
         player.event = nil; player.stop(); actions.invalidate()
         // Closing the owned app-server also cancels any outstanding backing-model action.
@@ -127,8 +128,8 @@ final class LiveConversation {
             actions.invalidate()
             status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute"
         }
-        if body["audible"] as? Bool == true { status = "Speaking · hold ⌃⌥Space to interrupt" }
-        if body["quiet"] as? Bool == true { status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute" }
+        if body["audible"] as? Bool == true { speaking = true; status = "Speaking · hold ⌃⌥Space to interrupt" }
+        if body["quiet"] as? Bool == true { speaking = false; status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute" }
     }
     private func receive(_ method: String, _ body: [String: Any]) {
         guard active, body["threadId"] as? String == threadID else { return }
