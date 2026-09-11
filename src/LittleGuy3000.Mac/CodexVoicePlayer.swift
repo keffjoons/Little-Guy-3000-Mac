@@ -14,6 +14,7 @@ protocol VoicePlaying: AnyObject {
 protocol LiveVoicePlaying: VoicePlaying {
     func prepareConversation(in host: NSView, syntheticInput: Bool)
     func setMuted(_ muted: Bool)
+    func setOutputEnabled(_ enabled: Bool)
     func playTestInput(_ data: Data)
 }
 
@@ -50,6 +51,7 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
     }
 
     func setMuted(_ muted: Bool) { web?.evaluateJavaScript("setMuted(\(muted));") }
+    func setOutputEnabled(_ enabled: Bool) { web?.evaluateJavaScript("setOutputEnabled(\(enabled));") }
 
     // Synthetic audio is used only by the explicit live acceptance test.
     func playTestInput(_ data: Data) {
@@ -105,6 +107,12 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
     let pc, ac, oscillator, timer, analyser, source, microphone, destination;
     let finishedAt = 0, lastSound = 0, heard = false, closed = false;
     const audio = document.getElementById('audio');
+    let outputEnabled = \(!conversation);
+    audio.muted = !outputEnabled;
+    function setOutputEnabled(enabled) {
+      outputEnabled = enabled; audio.muted = !enabled;
+      if (!enabled) { heard = false; lastSound = 0; }
+    }
     function closeVoice() {
       if (closed) return; closed = true;
       clearInterval(timer); audio.pause(); audio.srcObject = null;
@@ -150,7 +158,7 @@ final class CodexVoicePlayer: NSObject, LiveVoicePlaying, WKNavigationDelegate, 
       send({sdp:pc.localDescription.sdp});
       const samples = new Float32Array(1024);
       timer = setInterval(() => {
-        if (analyser) {
+        if (outputEnabled && analyser) {
           analyser.getFloatTimeDomainData(samples);
           let peak = 0; for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
           if (peak > 0.002) {

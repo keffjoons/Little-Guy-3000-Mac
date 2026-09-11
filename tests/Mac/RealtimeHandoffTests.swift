@@ -38,7 +38,7 @@ import AppKit
                     return WindowActions.result(checkedWarmTurn ? "Synthetic Notes window. Its visible heading is Cedar Notebook 731." : playlist ? "Synthetic Spotify window. Your Library contains [create] AXButton: Create playlist. This test is guidance only; no actions are available."
                         : "Synthetic test window. The attached image is current visual evidence. No action controls are available.", image: checkedWarmTurn ? nil : image)
                 }
-                live.testAudio = try Data(contentsOf: URL(fileURLWithPath: playlist ? ".local/live-playlist.wav" : ".local/live-screen.wav"))
+                let questionAudio = try Data(contentsOf: URL(fileURLWithPath: playlist ? ".local/live-playlist.wav" : ".local/live-screen.wav"))
                 let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
                 let config = try String(contentsOfFile: "artifacts/Little Guy 3000.app/Contents/Resources/guide-config.toml", encoding: .utf8)
                 live.start(in: window.contentView!, executable: CodexConnection.executable()!, home: home, configuration: config,
@@ -46,12 +46,24 @@ import AppKit
                 live.setShortcutHeld(true)
                 var previous = ""
                 var previousReply = "", replyChangedAt = Date()
+                var readyAt: Date?, questionSent = false
                 let deadline = Date().addingTimeInterval(150)
                 while Date() < deadline {
                     if let error = live.error { throw CompanionError.message(error) }
+                    if live.connected && readyAt == nil { readyAt = Date() }
+                    if !questionSent {
+                        precondition(live.replyText.isEmpty && !live.speaking && !inspected, "Holding the shortcut with no speech must remain silent")
+                        if let readyAt, Date().timeIntervalSince(readyAt) > 8 {
+                            print("PASS: eight seconds of connected shortcut hold and screenshot delivery without unsolicited output")
+                            questionSent = true; voicePlayer.playTestInput(questionAudio)
+                        }
+                    }
                     if live.status != previous { previous = live.status; print(previous) }
                     if live.replyText != previousReply { previousReply = live.replyText; replyChangedAt = Date() }
-                    let correct = checkedWarmTurn ? live.replyText.contains("731") && live.replyText.lowercased().contains("blue") : playlist ? live.replyText.lowercased().contains("create playlist")
+                    let spokenReply = live.replyText.lowercased().replacingOccurrences(of: "-", with: " ")
+                    let headingMatches = spokenReply.contains("731") || spokenReply.contains("seven thirty one")
+                        || spokenReply.contains("seven hundred and thirty one") || spokenReply.contains("seven hundred thirty one")
+                    let correct = checkedWarmTurn ? headingMatches && spokenReply.contains("blue") : playlist ? live.replyText.lowercased().contains("create playlist")
                         : live.replyText.lowercased().contains("green") && live.replyText.contains("472")
                     if (inspected || checkedWarmTurn) && correct && !live.speaking && Date().timeIntervalSince(replyChangedAt) > 1.5 {
                         if playlist && !checkedWarmTurn {

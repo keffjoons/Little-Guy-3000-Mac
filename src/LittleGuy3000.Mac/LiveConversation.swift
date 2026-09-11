@@ -22,6 +22,7 @@ final class LiveConversation {
     @ObservationIgnored private var starting = false
     @ObservationIgnored private var userTurn = false
     @ObservationIgnored private var assistantTurn = false
+    @ObservationIgnored private var hasUserInput = false
     @ObservationIgnored private var contextUpdate: Task<Void, Never>?
     @ObservationIgnored private var sentContext = ""
     @ObservationIgnored private var screenRead: Task<Void, Never>?
@@ -38,7 +39,7 @@ final class LiveConversation {
         self.transport.notification = { [weak self] method, body in self?.receive(method, body) }
         self.transport.disconnected = { [weak self] in self?.fail("Live voice disconnected. Start it again to reconnect.") }
         self.transport.toolCall = { [weak self] body in
-            guard let self, self.active, body["threadId"] as? String == self.threadID,
+            guard let self, self.active, self.hasUserInput, body["threadId"] as? String == self.threadID,
                   let name = body["tool"] as? String, let args = body["arguments"] as? [String: Any] else {
                 return WindowActions.result("No active matching voice session.", success: false)
             }
@@ -90,14 +91,15 @@ final class LiveConversation {
         guard actions.target != target || actions.enabled != enabled else { return }
         actions.target = target; actions.enabled = enabled
         invalidateScreen()
-        updateVoiceContext()
+        updateScreenContext()
     }
     func setShortcutHeld(_ held: Bool) {
         guard active else { return }
         if held && muted {
+            hasUserInput = false; speaking = false; player.setOutputEnabled(false)
             actions.userIntent = ""; heardText = ""; replyText = ""; userTurn = false; assistantTurn = false
             refreshScreen()
-            updateVoiceContext(force: true)
+            updateScreenContext(force: true)
         }
         muted = !held
         player.setMuted(muted)
@@ -106,9 +108,10 @@ final class LiveConversation {
     func send(_ text: String) {
         guard connected, let id = threadID, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 20_000 else { return }
         actions.userIntent = text; heardText = text; replyText = ""
+        acceptUserInput(text)
         refreshScreen()
         let screen = screenRead
-        updateVoiceContext(force: true)
+        updateScreenContext(force: true)
         let token = generation
         Task { [weak self] in
             await screen?.value
@@ -120,6 +123,7 @@ final class LiveConversation {
     }
     func stop() {
         active = false; connected = false; speaking = false; generation = UUID()
+        hasUserInput = false
         startup?.cancel(); timeout?.cancel(); contextUpdate?.cancel(); contextUpdate = nil; sentContext = ""
         invalidateScreen()
         player.event = nil; player.stop(); actions.invalidate()
@@ -129,6 +133,11 @@ final class LiveConversation {
     }
     func clear() { stop(); heardText = ""; replyText = ""; error = nil }
     private func fail(_ message: String) { guard active else { return }; stop(); error = message }
+
+    private func acceptUserInput(_ text: String) {
+        guard !hasUserInput, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        hasUserInput = true; player.setOutputEnabled(true)
+    }
 
     private var screenContext: String {
         let metadata = Self.screenContext(target: actions.target, enabled: actions.enabled)
@@ -158,7 +167,7 @@ final class LiveConversation {
             } catch { content = "Window capture failed: \(error.localizedDescription). Do not claim to see the window; explain this specific failure if screen context is needed." }
             guard !Task.isCancelled, self.generation == token, self.screenRevision == revision else { return }
             self.visibleContent = content
-            self.updateVoiceContext()
+            self.updateScreenContext()
         }
     }
 
@@ -172,7 +181,7 @@ final class LiveConversation {
         """
     }
 
-    private func updateVoiceContext(force: Bool = false) {
+    private func updateScreenContext(force: Bool = false) {
         guard active, connected, let id = threadID else { return }
         let text = screenContext
         guard force || text != sentContext else { return }
@@ -182,12 +191,10 @@ final class LiveConversation {
             guard let self, self.generation == token, !Task.isCancelled else { return }
             do {
                 // Append the actual screenshot without starting a turn or speaking.
-                // Realtime gets visible text; its backing Astra thread gets pixels too.
+                // Keep context out of realtime appendText: that can trigger a reply.
                 var content: [[String: Any]] = [["type": "input_text", "text": "Automatic window context, not a new user request. Use only this latest capture; previous captures are stale. No action is authorized by this update.\n" + text]]
                 if let image { content.append(["type": "input_image", "image_url": "data:image/png;base64," + image.base64EncodedString()]) }
                 _ = try await self.transport.request("thread/inject_items", ["threadId": id, "items": [["type": "message", "role": "user", "content": content]]])
-                guard self.generation == token, !Task.isCancelled else { return }
-                _ = try await self.transport.request("thread/realtime/appendText", ["threadId": id, "role": "developer", "text": text])
             } catch {
                 guard self.generation == token, !Task.isCancelled else { return }
                 self.fail("Could not update the voice session’s window context: \(error.localizedDescription)")
@@ -202,23 +209,21 @@ final class LiveConversation {
             starting = true
             Task { [weak self] in
                 guard let self, self.generation == token else { return }
-                self.sentContext = self.screenContext
-                var parameters = Self.startParameters(id: id, sdp: sdp)
-                parameters["initialItems"] = [["role": "developer", "text": self.sentContext]]
+                let parameters = Self.startParameters(id: id, sdp: sdp)
                 do { _ = try await self.transport.request("thread/realtime/start", parameters) }
                 catch { guard self.generation == token else { return }; self.fail(error.localizedDescription) }
             }
         }
         if body["ready"] as? Bool == true {
             connected = true; timeout?.cancel(); status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute"
-            updateVoiceContext(force: true)
+            updateScreenContext(force: true)
             if let testAudio { player.playTestInput(testAudio) }
         }
         if body["input"] as? Bool == true {
             actions.invalidate()
             status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute"
         }
-        if body["audible"] as? Bool == true { speaking = true; status = "Speaking · hold ⌃⌥Space to interrupt" }
+        if body["audible"] as? Bool == true, hasUserInput { speaking = true; status = "Speaking · hold ⌃⌥Space to interrupt" }
         if body["quiet"] as? Bool == true { speaking = false; status = muted ? "Microphone muted · hold ⌃⌥Space to talk" : "Listening · release to mute" }
     }
     private func receive(_ method: String, _ body: [String: Any]) {
@@ -228,16 +233,18 @@ final class LiveConversation {
         case "thread/realtime/transcript/delta":
             let delta = body["delta"] as? String ?? ""
             if body["role"] as? String == "user" {
+                acceptUserInput(delta)
                 if !userTurn { heardText = ""; userTurn = true }
                 heardText = String((heardText + delta).suffix(20_000))
             } else {
+                guard hasUserInput else { return }
                 if !assistantTurn { replyText = ""; assistantTurn = true }
                 replyText = String((replyText + delta).suffix(20_000))
             }
         case "thread/realtime/transcript/done":
             let text = body["text"] as? String ?? ""
-            if body["role"] as? String == "user" { heardText = text; userTurn = false; actions.userIntent = text }
-            else { replyText = text; assistantTurn = false }
+            if body["role"] as? String == "user" { acceptUserInput(text); heardText = text; userTurn = false; actions.userIntent = text }
+            else if hasUserInput { replyText = text; assistantTurn = false }
         case "thread/realtime/error": fail("The live voice service reported an error. End and restart the conversation.")
         case "thread/realtime/closed": fail("The live voice connection ended. Start voice again to continue.")
         case "turn/started": status = "Checking with Astra…"
@@ -257,7 +264,7 @@ final class LiveConversation {
     static func startParameters(id: String, sdp: String) -> [String: Any] {
         ["threadId": id, "version": "v3", "outputModality": "audio", "transport": ["type": "webrtc", "sdp": sdp],
          "includeStartupContext": false, "clientManagedHandoffs": false, "codexResponseHandoffMode": "thinking",
-         "delegationAckFiller": true,
-         "prompt": "You are Little Guy, a friendly live voice companion on the user's Mac. The connection stays open, but the microphone transmits only while the user holds the shortcut. The user can hold it to interrupt you. Respond directly to casual conversation without delegation. The app sends silent current-window context at startup and on each request; use the latest context and discard previous window assumptions. When screen context is ON, app workflow questions such as How do I make a new playlist refer to the selected app even if the user does not name it or say screen. For ANY such question, question about the user's screen, reference such as this/that playlist or window, or request to control the computer, delegate to the backing Codex assistant, which can inspect the selected window and use its controls. The app automatically captures the selected window on each shortcut request and supplies its visible text. Use that current context immediately. The backing assistant receives a full screenshot through inspect_window when visual detail or controls are needed. Never say you need the user to ask you to check the screen; shortcut use with screen context ON already authorizes inspection. Never invent screen contents or claim an action succeeded without a verified tool result. First inspect the selected window; ask a clarifying question only if the inspected evidence still leaves the intended target ambiguous. Never ask which app the user is using before checking the supplied app context and delegating inspection. Keep spoken replies concise; do not announce technical steps. Do not ask for an additional confirmation before carrying out the user's requested window actions. Do not produce an unsolicited greeting before the user speaks."]
+         "delegationAckFiller": false,
+         "prompt": "You are Little Guy, a friendly live voice companion on the user's Mac. The connection stays open, but the microphone transmits only while the user holds the shortcut. The user can hold it to interrupt you. Respond directly to casual conversation without delegation. The app silently supplies automatic screenshots and visible text to the backing Codex assistant on every shortcut request. It knows the currently selected window. Context changes are never user requests. Wait for actual user speech before responding or delegating. When screen context is ON, app workflow questions such as How do I make a new playlist refer to the selected app even if the user does not name it or say screen. For ANY such question, question about the user's screen, reference such as this/that playlist or window, or request to control the computer, delegate to the backing Codex assistant, which can inspect the selected window and use its controls. The backing assistant already receives the latest automatic screenshot and can refresh it with inspect_window. Use delegation to obtain current visual context after the user asks a question. Never say you need the user to ask you to check the screen; shortcut use with screen context ON already authorizes inspection. Never invent screen contents or claim an action succeeded without a verified tool result. First inspect the selected window; ask a clarifying question only if the inspected evidence still leaves the intended target ambiguous. Never ask which app the user is using before checking the supplied app context and delegating inspection. Keep spoken replies concise; do not announce technical steps. Do not ask for an additional confirmation before carrying out the user's requested window actions. Do not produce an unsolicited greeting before the user speaks."]
     }
 }

@@ -20,6 +20,7 @@ import AppKit
     var event: (([String: Any]) -> Void)?
     var prepares = 0, stops = 0
     var muted = false
+    var outputEnabled = false
     var sdp = ""
     func prepare(in host: NSView) {}
     func prepareConversation(in host: NSView, syntheticInput: Bool) { prepares += 1 }
@@ -27,6 +28,7 @@ import AppKit
     func finishWhenQuiet() { fatalError("Live calls must not stop on a completed answer") }
     func stop() { stops += 1 }
     func setMuted(_ muted: Bool) { self.muted = muted }
+    func setOutputEnabled(_ enabled: Bool) { outputEnabled = enabled }
     func playTestInput(_ data: Data) {}
 }
 @main struct RealtimeTests {
@@ -39,10 +41,17 @@ import AppKit
         player.event?(["sdp": "offer"]); await settle()
         let params = backend.calls.first { $0.0 == "thread/realtime/start" }!.1
         precondition(params["clientManagedHandoffs"] as? Bool == false && params["version"] as? String == "v3")
-        precondition((params["initialItems"] as? [[String: String]])?.first?["text"]?.contains("Screen context is OFF") == true)
+        precondition(params["initialItems"] == nil, "Context must not seed a realtime conversation turn")
         player.event?(["ready": true]); precondition(live.connected)
+        backend.emit("thread/realtime/transcript/delta", ["threadId": "live", "role": "assistant", "delta": "Unsolicited greeting"])
+        backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "assistant", "text": "Unsolicited greeting"])
+        player.event?(["audible": true])
+        precondition(!player.outputEnabled && !live.speaking && live.replyText.isEmpty, "Startup cannot produce visible or audible replies")
+        let unsolicited = await backend.toolCall!(["threadId": "live", "tool": "inspect_window", "arguments": [:]])
+        precondition(unsolicited["success"] as? Bool == false)
         precondition(live.muted, "Connecting must never open the microphone")
         live.setShortcutHeld(true); precondition(!live.muted && !player.muted)
+        precondition(!player.outputEnabled, "Pressing the shortcut does not authorize a reply")
         live.setShortcutHeld(false); precondition(live.muted && player.muted)
         player.muted = false
         player.event?(["microphone": true]); precondition(player.muted, "Mute must survive delayed microphone authorization")
@@ -52,6 +61,7 @@ import AppKit
         backend.emit("thread/realtime/sdp", ["threadId": "live", "sdp": "answer"])
         precondition(player.sdp == "answer")
         live.send("hello"); await settle()
+        precondition(player.outputEnabled, "Actual input opens playback")
         backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "assistant", "text": "Hello"])
         player.event?(["audible": true]); precondition(live.speaking)
         player.event?(["quiet": true]); precondition(!live.speaking)
@@ -67,24 +77,25 @@ import AppKit
         let spotify = PointerTarget(id: 42, pid: 9, name: "Spotify")
         live.setContext(target: spotify, enabled: true); await settle()
         let context = backend.calls.last!.1
-        precondition(context["role"] as? String == "developer" && (context["text"] as? String)?.contains("Spotify") == true)
+        precondition(String(describing: context).contains("Spotify"))
         live.send("How do I make a new playlist?"); await settle()
         let requestIndex = backend.calls.lastIndex { $0.1["text"] as? String == "How do I make a new playlist?" }!
-        precondition(backend.calls[requestIndex - 1].1["role"] as? String == "developer", "Current context precedes the question")
+        precondition(backend.calls[requestIndex - 1].0 == "thread/inject_items", "Silent screenshot context precedes the question")
         let snapshot = backend.calls[..<requestIndex].last { $0.0 == "thread/inject_items" }!.1
         let items = snapshot["items"] as! [[String: Any]]
         let content = items[0]["content"] as! [[String: Any]]
         precondition(content.contains { $0["type"] as? String == "input_image" }, "Automatically deliver the full screenshot before the question")
-        precondition((backend.calls[requestIndex - 1].1["text"] as? String)?.contains("Test library") == true, "Voice receives visible content too")
+        precondition(String(describing: backend.calls[requestIndex - 1].1).contains("Test library"), "Voice receives visible content too")
         live.setContext(target: nil, enabled: true); await settle()
-        precondition((backend.calls.last!.1["text"] as? String)?.contains("no window was selected") == true)
+        precondition(String(describing: backend.calls.last!.1).contains("no window was selected"))
         let cleared = backend.calls.last { $0.0 == "thread/inject_items" }!.1["items"] as! [[String: Any]]
         precondition((cleared[0]["content"] as! [[String: Any]]).count == 1, "Missing window must not resend an old screenshot")
         live.setContext(target: spotify, enabled: false); await settle()
-        precondition((backend.calls.last!.1["text"] as? String)?.contains("Screen context is OFF") == true)
+        precondition(String(describing: backend.calls.last!.1).contains("Screen context is OFF"))
         backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "user", "text": "Previous question"])
         backend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "assistant", "text": "Previous answer"])
         live.setShortcutHeld(false); live.setShortcutHeld(true)
+        precondition(!player.outputEnabled, "A new hold waits for new words")
         precondition(live.heardText.isEmpty && live.replyText.isEmpty, "A new spoken request replaces the previous exchange")
         let staleCallback = player.event
         live.stop(); precondition(!live.active && !live.connected && backend.stops > 0)
@@ -105,11 +116,10 @@ import AppKit
         live.stop()
         live.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: spotify, screenEnabled: true, syntheticInput: true)
         await settle(); player.event?(["sdp": "offer"]); await settle()
-        let initial = backend.calls.last { $0.0 == "thread/realtime/start" }!.1["initialItems"] as! [[String: String]]
-        precondition(initial.first!["text"]!.contains("Spotify"), "The first voice turn knows the selected app")
+        precondition(backend.calls.last { $0.0 == "thread/realtime/start" }!.1["initialItems"] == nil)
         live.setContext(target: PointerTarget(id: 43, pid: 10, name: "Notes"), enabled: true)
         player.event?(["ready": true]); await settle()
-        precondition((backend.calls.last!.1["text"] as? String)?.contains("Notes") == true, "A window change during connection replaces startup context")
+        precondition(String(describing: backend.calls.last!.1).contains("Notes"), "A window change during connection replaces startup context")
         live.stop()
         let delayedBackend = RealtimeBackend(), delayedPlayer = RealtimePlayer()
         var pendingCapture: CheckedContinuation<(image: Data, text: String), Error>?
@@ -125,7 +135,9 @@ import AppKit
         precondition(!updates.contains { String(describing: $0.1).contains("input_image") }, "Late captures cannot upload after screen context is disabled")
         precondition(!delayedBackend.calls.contains { String(describing: $0.1).contains("STALE SPOTIFY CONTENT") })
         delayed.stop()
+        precondition(!backend.calls.contains { $0.0 == "thread/realtime/appendText" && $0.1["role"] as? String != "user" }, "Screen updates must never enter the reply-triggering realtime input route")
         let page = CodexVoicePlayer.page(conversation: true)
+        precondition(page.contains("let outputEnabled = false") && page.contains("audio.muted = !outputEnabled"))
         precondition(page.contains("getUserMedia") && page.contains("echoCancellation:true") && page.contains("track.stop()"))
         precondition(!CodexVoicePlayer.html.contains("getUserMedia"))
         print("PASS: persistent realtime session, mute, transcript completion without teardown, stale sessions, scope gating, shortcut-only microphone input and playback receipt policy")
