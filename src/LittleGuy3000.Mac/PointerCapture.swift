@@ -62,7 +62,7 @@ enum PointerCapture {
     }
 
     // OCR gives live voice immediate visible context. Visual questions and actions
-    // still use inspect_window's full screenshot and accessibility controls.
+    // can refresh visual evidence through native Codex computer-use tools.
     nonisolated static func recognizeText(_ image: Data) async throws -> String {
         try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()

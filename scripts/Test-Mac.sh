@@ -31,7 +31,7 @@ xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
 .local/mac-speech-tests
 xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
     src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
-    src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+    src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/NativeComputerUse.swift src/LittleGuy3000.Mac/WindowActions.swift \
     src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
     tests/Mac/RealtimeTests.swift -o .local/mac-realtime-tests
 .local/mac-realtime-tests
@@ -45,7 +45,7 @@ if [ "${1:-}" = "--realtime" ]; then
     /usr/bin/afconvert -f WAVE -d LEI16 .local/live-interrupt.aiff .local/live-interrupt.wav
     xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
         src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
-        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/NativeComputerUse.swift src/LittleGuy3000.Mac/WindowActions.swift \
         src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
         tests/Mac/RealtimeLiveTests.swift -o .local/mac-realtime-live-tests
     .local/mac-realtime-live-tests
@@ -53,7 +53,7 @@ if [ "${1:-}" = "--realtime" ]; then
     /usr/bin/afconvert -f WAVE -d LEI16 .local/live-screen.aiff .local/live-screen.wav
     xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
         src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
-        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/WindowActions.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/NativeComputerUse.swift src/LittleGuy3000.Mac/WindowActions.swift \
         src/LittleGuy3000.Mac/PointerCapture.swift src/LittleGuy3000.Mac/ImageAttachment.swift \
         tests/Mac/RealtimeHandoffTests.swift -o .local/mac-realtime-handoff-tests
     .local/mac-realtime-handoff-tests
@@ -78,4 +78,20 @@ if [ "${1:-}" = "--voice" ]; then
         src/LittleGuy3000.Mac/CodexVoicePlayer.swift src/LittleGuy3000.Mac/SpeechController.swift \
         tests/Mac/LiveVoiceTests.swift -o .local/mac-live-voice-tests
     .local/mac-live-voice-tests
+fi
+if [ "${1:-}" = "--native" ]; then
+    # Explicit real-device check: resumes Spotify and leaves it paused. Close
+    # Little Guy first; the signed fixture reuses its Screen Recording identity.
+    /usr/bin/say -v Samantha -o .local/native-playback.aiff 'Using Spotify in the background, resume the current track and verify that it is playing, then pause it again and verify it is paused. Keep my current foreground app in front.'
+    /usr/bin/afconvert -f WAVE -d LEI16 .local/native-playback.aiff .local/native-playback.wav
+    xcrun swiftc -swift-version 5 -module-cache-path "$ROOT/.local/swift-cache" \
+        src/LittleGuy3000.Mac/CodexConnection.swift src/LittleGuy3000.Mac/CodexVoicePlayer.swift \
+        src/LittleGuy3000.Mac/LiveConversation.swift src/LittleGuy3000.Mac/NativeComputerUse.swift \
+        src/LittleGuy3000.Mac/WindowActions.swift src/LittleGuy3000.Mac/PointerCapture.swift \
+        src/LittleGuy3000.Mac/ImageAttachment.swift tests/Mac/NativeComputerUseLiveTests.swift \
+        -o .local/native-acceptance
+    ditto "$ROOT/artifacts/Little Guy 3000.app" "$ROOT/.local/Native Acceptance.app"
+    cp .local/native-acceptance "$ROOT/.local/Native Acceptance.app/Contents/MacOS/LittleGuy3000"
+    python3 scripts/Sign-Mac.py "$ROOT/.local/Native Acceptance.app"
+    "$ROOT/.local/Native Acceptance.app/Contents/MacOS/LittleGuy3000"
 fi

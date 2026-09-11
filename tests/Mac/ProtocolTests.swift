@@ -40,6 +40,15 @@ struct ProtocolTests {
         precondition(action["success"] as? Bool == true)
         let stillDenied = try await client.request("test/approval")
         precondition(stillDenied["declined"] as? Bool == true)
+        let noAccess = try await client.request("test/app-access")
+        precondition(noAccess["action"] as? String == "decline")
+        client.appAccessRequest = { request in
+            precondition(request["threadId"] as? String == "live")
+            return ["action": "accept", "content": [:], "_meta": ["persist": "session"]]
+        }
+        let appAccess = try await client.request("test/app-access")
+        precondition(appAccess["action"] as? String == "accept")
+        client.appAccessRequest = nil
         client.toolCall = nil
         do { _ = try await client.request("test/error"); fatalError("Expected protocol failure") }
         catch { precondition(error.localizedDescription.contains("-42")) }

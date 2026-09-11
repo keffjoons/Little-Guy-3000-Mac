@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor private final class RealtimeCheck: NSObject, NSApplicationDelegate {
-    let live = LiveConversation()
+    let live = LiveConversation(nativeComputerUse: false)
     let player = CodexVoicePlayer()
     var window: NSWindow!
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -11,7 +11,7 @@ import AppKit
             do {
                 let first = try Data(contentsOf: URL(fileURLWithPath: ".local/live-first.wav"))
                 let second = try Data(contentsOf: URL(fileURLWithPath: ".local/live-interrupt.wav"))
-                let tested = LiveConversation(player: player)
+                let tested = LiveConversation(player: player, nativeComputerUse: false)
                 tested.testAudio = first
                 let home = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LittleGuy3000/codex")
                 let config = try String(contentsOfFile: "artifacts/Little Guy 3000.app/Contents/Resources/guide-config.toml", encoding: .utf8)

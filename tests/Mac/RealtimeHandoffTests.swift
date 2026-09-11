@@ -27,7 +27,7 @@ import AppKit
                     image = Self.fixture("Spotify — synthetic test window\nYour Library\n+ Create playlist")
                 } else { image = try Data(contentsOf: URL(fileURLWithPath: ".local/image-test-card.png")) }
                 let voicePlayer = CodexVoicePlayer()
-                live = LiveConversation(transport: backend, player: voicePlayer, readScreen: { _ in (image, try await PointerCapture.recognizeText(image)) })
+                live = LiveConversation(transport: backend, player: voicePlayer, nativeComputerUse: false, readScreen: { _ in (image, try await PointerCapture.recognizeText(image)) })
                 // Only the external window is simulated. Codex voice, delegation,
                 // Astra, JSON-RPC dynamic-tool dispatch and image delivery are real.
                 backend.toolCall = { params in

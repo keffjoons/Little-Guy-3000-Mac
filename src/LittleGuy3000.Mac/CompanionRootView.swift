@@ -336,8 +336,8 @@ private struct CompanionSettings: View {
                 Section("Your privacy") {
                     Toggle("Capture the pointed window for quick questions", isOn: $quick.screenEnabled)
                     Button("Enable Screen Recording…", action: enableScreen)
-                    Button("Enable window controls…") { WindowActions.requestAccess() }
-                    Text("Live voice can ask Astra to inspect and operate the selected window. Screen context must be on. Requested actions run directly without an extra approval popup. Screenshots and microphone audio while the shortcut is held go through your ChatGPT connection. Escape stops the microphone and pending actions.")
+                    Text("Computer Use permissions are managed in Codex.").font(.caption).foregroundStyle(.secondary)
+                    Text("With screen context on, Astra uses native Codex Computer Use to inspect and operate requested apps in the background. Ordinary app access follows your request without an extra popup. Screenshots and microphone audio while the shortcut is held go through your ChatGPT connection. Escape stops the microphone and pending actions.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)

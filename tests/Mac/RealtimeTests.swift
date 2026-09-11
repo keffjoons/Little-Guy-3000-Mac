@@ -4,6 +4,7 @@ import AppKit
     var notification: ((String, [String: Any]) -> Void)?
     var disconnected: (() -> Void)?
     var toolCall: (([String: Any]) async -> [String: Any])?
+    var appAccessRequest: (([String: Any]) -> [String: Any])?
     var calls: [(String, [String: Any])] = []
     var stops = 0
     func start(executable: String, home: URL, configuration: String) async throws {}
@@ -35,7 +36,7 @@ import AppKit
     @MainActor static func settle() async { for _ in 0..<30 { await Task.yield() } }
     @MainActor static func main() async {
         let backend = RealtimeBackend(), player = RealtimePlayer(), host = NSView()
-        let live = LiveConversation(transport: backend, player: player, readScreen: { target in (Data([1]), "Visible heading in \(target.name): Test library") })
+        let live = LiveConversation(transport: backend, player: player, nativeComputerUse: false, readScreen: { target in (Data([1]), "Visible heading in \(target.name): Test library") })
         live.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: nil, screenEnabled: false, syntheticInput: true)
         await settle(); precondition(live.active && player.prepares == 1)
         player.event?(["sdp": "offer"]); await settle()
@@ -123,7 +124,7 @@ import AppKit
         live.stop()
         let delayedBackend = RealtimeBackend(), delayedPlayer = RealtimePlayer()
         var pendingCapture: CheckedContinuation<(image: Data, text: String), Error>?
-        let delayed = LiveConversation(transport: delayedBackend, player: delayedPlayer, readScreen: { _ in
+        let delayed = LiveConversation(transport: delayedBackend, player: delayedPlayer, nativeComputerUse: false, readScreen: { _ in
             try await withCheckedThrowingContinuation { pendingCapture = $0 }
         })
         delayed.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "", target: spotify, screenEnabled: true, syntheticInput: true)
@@ -140,6 +141,52 @@ import AppKit
         precondition(page.contains("let outputEnabled = false") && page.contains("audio.muted = !outputEnabled"))
         precondition(page.contains("getUserMedia") && page.contains("echoCancellation:true") && page.contains("track.stop()"))
         precondition(!CodexVoicePlayer.html.contains("getUserMedia"))
+        let nativeBackend = RealtimeBackend(), nativePlayer = RealtimePlayer()
+        let pluginRoot = FileManager.default.temporaryDirectory.appendingPathComponent("native-plugin-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: pluginRoot) }
+        do {
+            for version in ["1.9", "1.10"] {
+                let folder = pluginRoot.appendingPathComponent(version)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let data = try JSONSerialization.data(withJSONObject: ["mcpServers": ["cua_repl": [
+                    "command": "/bin/sh", "args": ["/bin/sh"], "env": ["VERSION": version], "omit_tools_from": ["code_mode"]]]])
+                try data.write(to: folder.appendingPathComponent(".mcp.json"))
+            }
+        } catch { fatalError(error.localizedDescription) }
+        let native = LiveConversation(transport: nativeBackend, player: nativePlayer,
+            nativeConfiguration: { try NativeComputerUse.configuration(pluginRoot: pluginRoot) })
+        native.start(in: host, executable: "fixture", home: URL(fileURLWithPath: "/tmp"), configuration: "",
+                     target: spotify, screenEnabled: true, syntheticInput: true)
+        await settle()
+        let nativeParams = nativeBackend.calls.first { $0.0 == "thread/start" }!.1
+        precondition((nativeParams["dynamicTools"] as? [Any])?.isEmpty == true, "Native sessions must not expose custom AX actions")
+        precondition(nativeParams["approvalPolicy"] as? String == "on-request")
+        let nativeConfig = nativeParams["config"] as! [String: Any]
+        let nativeServers = nativeConfig["mcp_servers"] as! [String: [String: Any]]
+        precondition(nativeServers["cua_repl"]?["required"] as? Bool == true)
+        precondition(nativeServers["cua_repl"]?["omit_tools_from"] == nil)
+        precondition((nativeServers["cua_repl"]?["env"] as? [String: String])?["VERSION"] == "1.10", "Choose the latest installed runtime numerically")
+        var access: [String: Any] = ["threadId": "live", "serverName": "cua_repl", "mode": "form",
+            "_meta": ["codex_approval_kind": "mcp_tool_call", "connector_id": "computer-use", "tool_params": ["app": "com.spotify.client"]]]
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline", "No app access before user input")
+        nativePlayer.event?(["ready": true])
+        nativeBackend.emit("thread/realtime/transcript/done", ["threadId": "live", "role": "user", "text": "Play Spotify"])
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "accept", "Spoken request authorizes ordinary app access without another popup")
+        access["threadId"] = "stale"
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline")
+        access["threadId"] = "live"; access["mode"] = "url"
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline", "Do not auto-approve login or verification flows")
+        access["mode"] = "form"; access["serverName"] = "other"
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline")
+        access["serverName"] = "cua_repl"
+        native.setContext(target: spotify, enabled: false)
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline", "Respect the computer context switch")
+        native.setContext(target: spotify, enabled: true); native.setShortcutHeld(true)
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline", "New shortcut hold waits for new words")
+        native.stop()
+        precondition(nativeBackend.appAccessRequest!(access)["action"] as? String == "decline")
+        precondition(!String(describing: LiveConversation.startParameters(id: "x", sdp: "sdp")).contains("inspect_window"))
+        print("PASS: native tool discovery, custom-control replacement and app-access authorization boundaries")
         print("PASS: persistent realtime session, mute, transcript completion without teardown, stale sessions, scope gating, shortcut-only microphone input and playback receipt policy")
     }
 }

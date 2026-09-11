@@ -24,6 +24,7 @@ protocol CodexVoiceBackend: AnyObject {
 @MainActor
 protocol CodexActionTransport: CodexTransport {
     var toolCall: (([String: Any]) async -> [String: Any])? { get set }
+    var appAccessRequest: (([String: Any]) -> [String: Any])? { get set }
 }
 
 @MainActor
@@ -38,6 +39,7 @@ final class CodexConnection: CodexActionTransport {
     var disconnected: (() -> Void)?
     // Installed only by a live session. Ordinary question sessions continue to deny tools.
     var toolCall: (([String: Any]) async -> [String: Any])?
+    var appAccessRequest: (([String: Any]) -> [String: Any])?
 
     init(clientTools: Bool = false) { self.clientTools = clientTools }
 
@@ -117,8 +119,8 @@ final class CodexConnection: CodexActionTransport {
         }
         do {
             _ = try await request("initialize", [
-                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.5.5"],
-                "capabilities": ["experimentalApi": true]
+                "clientInfo": ["name": "LittleGuy3000Mac", "title": "Little Guy 3000", "version": "0.6.0"],
+                "capabilities": ["experimentalApi": true, "mcpServerOpenaiFormElicitation": true]
             ])
             try write(["method": "initialized"])
         } catch { stop(); throw error }
@@ -154,6 +156,11 @@ final class CodexConnection: CodexActionTransport {
         }
         if let method = value["method"] as? String {
             if let id = value["id"] {
+                if method == "mcpServer/elicitation/request" {
+                    let params = value["params"] as? [String: Any] ?? [:]
+                    try? write(["id": id, "result": appAccessRequest?(params) ?? ["action": "decline"]])
+                    return
+                }
                 if method == "item/tool/call", let handler = toolCall, let child = process {
                     let params = value["params"] as? [String: Any] ?? [:]
                     Task { [weak self, weak child] in

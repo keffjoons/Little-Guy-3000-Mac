@@ -14,9 +14,6 @@ final class WindowActions {
     private struct Control { let element: AXUIElement; let label: String; let role: String }
 
     static var permitted: Bool { AXIsProcessTrusted() }
-    static func requestAccess() {
-        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-    }
     func invalidate() { revision = UUID(); controls.removeAll(); window = nil }
 
     static let specifications: [[String: Any]] = [

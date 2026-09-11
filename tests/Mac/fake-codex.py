@@ -29,6 +29,11 @@ for line in sys.stdin:
     elif method == 'test/action':
         waiting['action'] = identity
         send({'id': 'action', 'method': 'item/tool/call', 'params': {'threadId': 'live', 'turnId': 'turn', 'callId': 'fixture', 'tool': 'inspect_window', 'arguments': {}}})
+    elif method == 'test/app-access':
+        waiting['access'] = identity
+        send({'id': 'access', 'method': 'mcpServer/elicitation/request', 'params': {'threadId': 'live', 'serverName': 'cua_repl'}})
+    elif identity == 'access' and identity in waiting:
+        send({'id': waiting.pop(identity), 'result': value.get('result', {})})
     elif identity == 'action' and identity in waiting:
         send({'id': waiting.pop(identity), 'result': value.get('result', {})})
     elif identity in waiting:
