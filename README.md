@@ -6,7 +6,7 @@ Native macOS port maintained in [keffjoons/Little-Guy-3000-Mac](https://github.c
 
 ## macOS preview
 
-A native SwiftUI and AppKit Mac companion (version **0.5.2**) shows only your latest words and one agent reply beside your cursor, then fades away. There are no buttons, status labels, input boxes or floating character in the overlay. **Hold Control–Option–Space to talk; release it to mute.** The connection stays ready between requests, and replies play while the microphone is muted. Hold the shortcut again to interrupt. Codex realtime voice handles the conversation; **GPT-6 Astra with Low reasoning** handles screen questions and window controls. With screen context on, it inspects the selected window when needed. Requested window actions run directly, without an Allow action popup.
+A native SwiftUI and AppKit Mac companion (version **0.5.3**) shows only your latest words and one agent reply beside your cursor, then fades away. A small mascot face appears immediately when you press the shortcut: connecting dots while voice starts, then a green listening pulse when connected and unmuted. Releasing the shortcut stops the pulse. There are no buttons, status labels or input boxes in the overlay. **Hold Control–Option–Space to talk; release it to mute.** The connection stays ready between requests, and replies play while the microphone is muted. Hold the shortcut again to interrupt. Codex realtime voice handles the conversation; **GPT-6 Astra with Low reasoning** handles screen questions and window controls. With screen context on, it inspects the selected window when needed. Requested window actions run directly, without an Allow action popup.
 
 On macOS 14 or later, with Xcode Command Line Tools and a current Codex runtime:
 

@@ -44,6 +44,7 @@ final class QuickCompanion {
     }
 
     var active: Bool { phase != .idle }
+    var shortcutHeld: Bool { pressed }
     var status: String {
         switch phase {
         case .preparing: "Preparing microphone…"

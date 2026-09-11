@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var overlayTimer: Timer?
     private var visibility = TranscriptVisibility()
     private var shownTranscript = QuickTranscript()
+    private var shownIndicator = ListeningIndicator.idle
     private var picker: ScreenCapturePicker?
     private var localMonitor: Any?
     private var dismissalMonitor: Any?
@@ -52,11 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if event.keyCode == UInt16(kVK_Space) {
                     if event.type == .keyDown,
                        event.modifierFlags.intersection([.control, .option, .command, .shift]) == [.control, .option] {
-                        if !self.localShortcutDown { self.localShortcutDown = true; self.showQuick(); self.quick.keyDown() }
+                        if !self.localShortcutDown { self.localShortcutDown = true; self.showQuick(); self.quick.keyDown(); self.updateOverlay() }
                         return true
                     }
                     if event.type == .keyUp, self.localShortcutDown {
-                        self.localShortcutDown = false; self.quick.keyUp(); return true
+                        self.localShortcutDown = false; self.quick.keyUp(); self.updateOverlay(); return true
                     }
                 }
                 return false
@@ -111,14 +112,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func updateOverlay() {
         guard !terminating, !window.isVisible else { bubble.orderOut(nil); return }
         let transcript = currentTranscript
+        let indicator = ListeningIndicator.state(held: quick.shortcutHeld, connected: live.connected, muted: live.muted)
         let opacity = visibility.opacity(for: transcript,
-            busy: !live.muted || live.speaking || speech.speaking || session.busy,
+            busy: indicator != .idle || live.speaking || speech.speaking || session.busy, indicator: indicator,
             at: ProcessInfo.processInfo.systemUptime)
         guard opacity > 0 else { bubble.orderOut(nil); return }
-        if transcript != shownTranscript {
+        if transcript != shownTranscript || indicator != shownIndicator {
             shownTranscript = transcript
-            bubbleHost.rootView = QuickCompanionView(transcript: transcript)
-            bubble.setContentSize(NSSize(width: 332, height: bubbleHost.fittingSize.height))
+            shownIndicator = indicator
+            bubbleHost.rootView = QuickCompanionView(transcript: transcript, indicator: indicator, reduceMotion: session.reducedMotion)
+            bubble.setContentSize(bubbleHost.fittingSize)
             positionBubble()
         }
         bubble.alphaValue = opacity
@@ -195,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
             MainActor.assumeIsolated {
                 let app = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
-                if pressed { app.showQuick(); app.quick.keyDown() } else { app.quick.keyUp() }
+                if pressed { app.showQuick(); app.quick.keyDown() } else { app.quick.keyUp() }; app.updateOverlay()
             }
             return noErr
         }, 2, &events, Unmanaged.passUnretained(self).toOpaque(), &hotKeyHandler)

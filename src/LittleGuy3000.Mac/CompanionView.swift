@@ -2,6 +2,7 @@ import AppKit
 
 final class CompanionView: NSView {
     var thinking = false
+    var listening = false
     var reduceMotion = false
     var clicked: (() -> Void)? {
         didSet {
@@ -33,6 +34,13 @@ final class CompanionView: NSView {
         let scale = min(bounds.width, bounds.height) / 100
         let transform = NSAffineTransform(); transform.scale(by: scale); transform.concat()
         let bob = sin(t * 1.8) * 1.2
+        if listening {
+            let pulse = reduced ? 0.5 : (sin(t * 5) + 1) / 2
+            NSColor.systemGreen.withAlphaComponent(0.35 + pulse * 0.3).setStroke()
+            let halo = NSBezierPath(ovalIn: NSRect(x: 7 - pulse * 2, y: 9 + bob - pulse * 2,
+                                                  width: 86 + pulse * 4, height: 84 + pulse * 4))
+            halo.lineWidth = 3; halo.stroke()
+        }
         NSColor.black.withAlphaComponent(0.10).setFill()
         NSBezierPath(ovalIn: NSRect(x: 20, y: 6, width: 60, height: 7)).fill()
         let face = NSBezierPath(ovalIn: NSRect(x: 13, y: 15 + bob, width: 74, height: 72))
