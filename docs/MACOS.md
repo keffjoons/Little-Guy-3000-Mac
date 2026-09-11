@@ -78,6 +78,12 @@ The optional `--codex-fixture` command also launches the real installed Codex ru
 
 `scripts/Build-Mac.sh` also verifies the finished bundle's local code signature. Manual desktop acceptance should cover sign-in, a real streamed answer, screenshot permission/selection/cancellation, image interpretation, follow-ups, copy, speech, menu/hotkey reopen, and quit with no surviving owned helper.
 
+### Version 0.6.2 — September 11, 2026
+
+- Escape in a foreground app no longer tears down a hidden, muted voice connection. Dismissing an active Little Guy popup cancels the old request and its actions, then prepares a fresh muted connection before the next shortcut.
+- The preparing animation still means local microphone setup is incomplete. A warm connection avoids this setup on ordinary requests. User text is displayed as soon as Codex transcript events arrive; it is remote transcription, not instant local dictation. The live acceptance test now measures first-transcript and spoken-reply latency separately from microphone readiness.
+- The regression suite and cold/warm live checks passed. In this single synthesized-audio run, the warm request's first transcript arrived 1.35 seconds after injection began and reply audio arrived at 3.94 seconds. These are network-dependent observations, not physical-microphone latency guarantees. Existing Microphone and Screen Recording signing requirements still match the update.
+
 ### Version 0.6.1 — September 11, 2026
 
 - Shortcut press enables live input immediately. With microphone permission already granted, launch and wake prepare the muted connection in advance; hiding the transcript preserves it. The mascot pulses when local capture is ready, including while held audio waits for the network.

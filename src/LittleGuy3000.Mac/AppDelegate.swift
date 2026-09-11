@@ -71,7 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         dismissalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.keyCode == 53 else { return }
             MainActor.assumeIsolated {
-                guard let self, self.live.active || self.bubble.isVisible else { return }
+                // Escape belongs to the foreground app when our overlay is hidden.
+                // A muted, warm voice connection is not an active interaction.
+                guard let self, self.bubble.isVisible else { return }
                 self.cancelInteraction()
             }
         }
@@ -305,7 +307,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func cancelInteraction() {
         visibility.dismiss(); bubble.orderOut(nil)
         stopSpeech()
-        if live.active { live.stop(); return }
+        if live.active {
+            quick.cancel(); live.stop()
+            // Cancel the old request and its actions, then prepare a fresh muted
+            // call now instead of making the next shortcut pay the startup cost.
+            warmVoiceIfAllowed()
+            return
+        }
         if quick.active { quick.cancel(); return }
         if session.isCapturing { picker?.cancel() }
         else if session.busy { Task { await session.cancel() } }

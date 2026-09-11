@@ -36,16 +36,20 @@ import AVFoundation
                 live.setShortcutHeld(true)
                 let receive = player.event
                 var sent = false, releasedBeforeReady = false, heardAnswer = false, warm = false
+                var utteranceStarted = started, firstTranscript = false
                 var readyEvents = 0
                 player.event = { body in
                     receive?(body)
                     if body["ready"] as? Bool == true { readyEvents += 1; print("Voice connected after", Date().timeIntervalSince(started), "seconds") }
-                    if body["audible"] as? Bool == true { heardAnswer = true; print("Received audible reply") }
+                    if body["audible"] as? Bool == true {
+                        heardAnswer = true
+                        print("Received audible reply after", Date().timeIntervalSince(utteranceStarted), "seconds from speech injection")
+                    }
                     if body["microphone"] as? Bool == true && !sent {
                         sent = true
                         precondition(!self.live.connected)
                         print("Local input ready after", Date().timeIntervalSince(started), "seconds; sending first words before Codex connects")
-                        player.playTestInput(audio)
+                        utteranceStarted = Date(); player.playTestInput(audio)
                         Task {
                             try await Task.sleep(for: .seconds(duration + 0.2))
                             releasedBeforeReady = !self.live.connected
@@ -58,6 +62,10 @@ import AVFoundation
                 var previous = ""
                 while Date() < deadline {
                     if let error = live.error { throw CompanionError.message(error) }
+                    if !live.heardText.isEmpty && !firstTranscript {
+                        firstTranscript = true
+                        print(warm ? "Warm" : "Cold", "first transcript after", Date().timeIntervalSince(utteranceStarted), "seconds from speech injection")
+                    }
                     let current = live.heardText + " | " + live.replyText
                     if current != previous { previous = current; print(current) }
                     if live.heardText.lowercased().contains("please repeat the words"), live.heardText.lowercased().contains("banana"), live.replyText.lowercased().contains("banana"), heardAnswer, !live.speaking {
@@ -66,11 +74,11 @@ import AVFoundation
                         print("Transcript:", live.heardText)
                         print("Reply:", live.replyText)
                         if !warm {
-                            warm = true; heardAnswer = false
+                            warm = true; heardAnswer = false; firstTranscript = false
                             window.orderOut(nil)
                             live.setShortcutHeld(true)
                             precondition(live.connected && live.inputReady)
-                            player.playTestInput(audio)
+                            utteranceStarted = Date(); player.playTestInput(audio)
                             Task { try await Task.sleep(for: .seconds(duration + 0.2)); self.live.setShortcutHeld(false) }
                             continue
                         }
